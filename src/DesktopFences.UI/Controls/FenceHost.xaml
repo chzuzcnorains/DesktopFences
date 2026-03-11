@@ -1,0 +1,72 @@
+<Window x:Class="DesktopFences.UI.Controls.FenceHost"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:DesktopFences.UI.Controls"
+        Title="Fence"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Topmost="False"
+        SizeToContent="Manual">
+    <!-- Outer margin for drop shadow space -->
+    <Grid Margin="4">
+        <Grid.RowDefinitions>
+            <!-- Tab strip row — Height=0 when single panel, 28 when tabbed -->
+            <RowDefinition x:Name="TabRow" Height="0" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Tab strip (only visible when 2+ panels are grouped) -->
+        <Border x:Name="TabStripBorder"
+                Grid.Row="0"
+                Background="#CC1E1E2E"
+                CornerRadius="8,8,0,0"
+                BorderBrush="#55888888"
+                BorderThickness="1,1,1,0"
+                Margin="0,0,0,-1">
+            <Grid>
+                <ItemsControl x:Name="TabStrip" Margin="0,0,30,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <Button x:Name="TabMenuButton"
+                        Content="⋯"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="26" Height="22"
+                        Margin="0,0,4,0"
+                        FontSize="13" FontWeight="Bold"
+                        Foreground="#AACCCCCC"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="TabMenuButton_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg"
+                                    Background="Transparent"
+                                    CornerRadius="4"
+                                    Padding="2,0">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Active fence panel -->
+        <controls:FencePanel x:Name="FenceContent" Grid.Row="1" />
+    </Grid>
+</Window>

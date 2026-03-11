@@ -1,0 +1,220 @@
+<UserControl x:Class="DesktopFences.UI.Controls.FencePanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DesktopFences.UI.ViewModels"
+             x:Name="Root"
+             AllowDrop="True"
+             Drop="OnDrop"
+             DragOver="OnDragOver">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="TitleBarVisibilityStyle" TargetType="{x:Type Border}">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ShowTitleBar, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- When ShowTitleBar=False (tabs visible), remove top corners -->
+        <Style x:Key="FenceBorderStyle" TargetType="{x:Type Border}">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ShowTitleBar, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
+                    <Setter Property="CornerRadius" Value="0,0,8,8"/>
+                    <Setter Property="BorderThickness" Value="1,0,1,1"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <!-- Main fence body -->
+        <Border x:Name="FenceBorder"
+                Background="#CC1E1E2E"
+                Style="{StaticResource FenceBorderStyle}"
+                BorderBrush="#55888888"
+                Opacity="{Binding FenceOpacity, FallbackValue=1.0}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.4" />
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="30" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Title Bar (drag handle + rename) -->
+                <Border x:Name="TitleBarBorder" Grid.Row="0"
+                        Style="{StaticResource TitleBarVisibilityStyle}"
+                        Background="#44FFFFFF"
+                        CornerRadius="6,6,0,0"
+                        MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
+                        ToolTip="{Binding PortalDisplayPath}"
+                        ToolTipService.IsEnabled="{Binding IsPortalMode}">
+                    <Grid>
+                        <TextBlock x:Name="TitleText"
+                                   Text="{Binding Title, FallbackValue='新建 Fence'}"
+                                   Foreground="#DDEEEEEE"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0,32,0" />
+                        <Button x:Name="TitleMenuButton"
+                                Content="⋯"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="24"
+                                Margin="0,0,4,0"
+                                FontSize="14" FontWeight="Bold"
+                                Foreground="#AACCCCCC"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Click="TitleMenuButton_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bg"
+                                                        Background="Transparent"
+                                                        CornerRadius="4"
+                                                        Padding="2,0">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- File icons area — ListBox with virtualization enabled -->
+                <ListBox x:Name="FileListBox"
+                         Grid.Row="1"
+                         ItemsSource="{Binding Files}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         Margin="4,2,4,4">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border x:Name="ItemBorder"
+                                    Width="72" Height="80"
+                                    Margin="2"
+                                    CornerRadius="4"
+                                    Background="Transparent"
+                                    MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
+                                    MouseRightButtonUp="FileItem_MouseRightButtonUp"
+                                    MouseMove="FileItem_MouseMove"
+                                    ToolTip="{Binding FilePath}">
+                                <StackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Margin="4">
+                                    <!-- IsAsync=True delays icon load off UI thread -->
+                                    <Image Source="{Binding Icon, IsAsync=True}"
+                                           Width="32" Height="32"
+                                           HorizontalAlignment="Center"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               Foreground="#DDEEEEEE"
+                                               FontSize="11"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxHeight="32"
+                                               TextWrapping="Wrap"
+                                               Margin="0,3,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                    <Setter TargetName="ItemBorder"
+                                            Property="Background" Value="#446688CC" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Empty state hint -->
+                <TextBlock Grid.Row="1"
+                           Foreground="#44FFFFFF"
+                           FontSize="12"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="拖放文件到此处" />
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Files.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsPortalMode}" Value="True">
+                                    <Setter Property="Text" Value="右键标题栏可更改映射文件夹" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- Resize grips (8 directions) -->
+        <Thumb x:Name="GripTop" Cursor="SizeNS" Opacity="0"
+               VerticalAlignment="Top" Height="5" Margin="5,0"
+               DragDelta="GripTop_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripBottom" Cursor="SizeNS" Opacity="0"
+               VerticalAlignment="Bottom" Height="5" Margin="5,0"
+               DragDelta="GripBottom_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripLeft" Cursor="SizeWE" Opacity="0"
+               HorizontalAlignment="Left" Width="5" Margin="0,5"
+               DragDelta="GripLeft_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripRight" Cursor="SizeWE" Opacity="0"
+               HorizontalAlignment="Right" Width="5" Margin="0,5"
+               DragDelta="GripRight_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripTopLeft" Cursor="SizeNWSE" Opacity="0"
+               VerticalAlignment="Top" HorizontalAlignment="Left" Width="8" Height="8"
+               DragDelta="GripTopLeft_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripTopRight" Cursor="SizeNESW" Opacity="0"
+               VerticalAlignment="Top" HorizontalAlignment="Right" Width="8" Height="8"
+               DragDelta="GripTopRight_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripBottomLeft" Cursor="SizeNESW" Opacity="0"
+               VerticalAlignment="Bottom" HorizontalAlignment="Left" Width="8" Height="8"
+               DragDelta="GripBottomLeft_DragDelta" DragCompleted="Grip_DragCompleted" />
+        <Thumb x:Name="GripBottomRight" Cursor="SizeNWSE" Opacity="0"
+               VerticalAlignment="Bottom" HorizontalAlignment="Right" Width="8" Height="8"
+               DragDelta="GripBottomRight_DragDelta" DragCompleted="Grip_DragCompleted" />
+    </Grid>
+</UserControl>

@@ -1,0 +1,157 @@
+<Window x:Class="DesktopFences.UI.Controls.RuleEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="分类规则"
+        Width="660" Height="480"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#FF1E1E2E">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Rule List -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="规则列表" FontSize="13" FontWeight="Bold"
+                           Foreground="#EEEEEE" Margin="0,0,0,8" />
+
+                <ListBox x:Name="RulesListBox" Grid.Row="1"
+                         DisplayMemberPath="Name"
+                         Background="#22FFFFFF" Foreground="White"
+                         BorderBrush="#44FFFFFF" BorderThickness="1"
+                         SelectionChanged="RulesListBox_SelectionChanged">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Foreground" Value="White" />
+                            <Setter Property="Padding" Value="6,4" />
+                            <Style.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#446688CC" />
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#33FFFFFF" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                    <Button Content="添加" Width="60" Margin="0,0,8,0"
+                            Click="BtnAdd_Click"
+                            Background="#446688CC" Foreground="White"
+                            BorderThickness="0" Padding="6,4" />
+                    <Button Content="删除" Width="60"
+                            Click="BtnDelete_Click"
+                            Background="#44AA4444" Foreground="White"
+                            BorderThickness="0" Padding="6,4" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Right: Edit Form -->
+            <StackPanel Grid.Column="2" x:Name="EditPanel" IsEnabled="False">
+                <TextBlock Text="编辑规则" FontSize="13" FontWeight="Bold"
+                           Foreground="#EEEEEE" Margin="0,0,0,12" />
+
+                <!-- Name -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="规则名称" Foreground="#CCCCCC" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtName" Grid.Column="1"
+                             Background="#33FFFFFF" Foreground="White"
+                             BorderBrush="#55888888" BorderThickness="1" Padding="4"
+                             TextChanged="TxtName_TextChanged" />
+                </Grid>
+
+                <!-- Enabled -->
+                <CheckBox x:Name="ChkEnabled" Content="启用此规则"
+                          Foreground="#CCCCCC" Margin="0,0,0,10"
+                          Checked="FieldChanged" Unchecked="FieldChanged" />
+
+                <!-- Priority -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="优先级" Foreground="#CCCCCC" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtPriority" Grid.Column="1"
+                             Background="#33FFFFFF" Foreground="White"
+                             BorderBrush="#55888888" BorderThickness="1" Padding="4"
+                             TextChanged="FieldChanged" />
+                </Grid>
+
+                <!-- Match Type -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="匹配方式" Foreground="#CCCCCC" VerticalAlignment="Center" />
+                    <ComboBox x:Name="CboMatchType" Grid.Column="1"
+                              SelectionChanged="CboMatchType_SelectionChanged" />
+                </Grid>
+
+                <!-- Pattern (hidden for IsDirectory) -->
+                <Grid Margin="0,0,0,8" x:Name="PatternRow">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="匹配模式" Foreground="#CCCCCC" VerticalAlignment="Center" />
+                    <TextBox x:Name="TxtPattern" Grid.Column="1"
+                             Background="#33FFFFFF" Foreground="White"
+                             BorderBrush="#55888888" BorderThickness="1" Padding="4"
+                             TextChanged="FieldChanged" />
+                </Grid>
+
+                <!-- Pattern hint -->
+                <TextBlock x:Name="TxtPatternHint" Grid.Column="1"
+                           Foreground="#88AAAAAA" FontSize="11"
+                           Margin="90,0,0,8" TextWrapping="Wrap" />
+
+                <!-- Target Fence -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="目标 Fence" Foreground="#CCCCCC" VerticalAlignment="Center" />
+                    <ComboBox x:Name="CboTargetFence" Grid.Column="1"
+                              SelectionChanged="FieldChanged" />
+                </Grid>
+            </StackPanel>
+        </Grid>
+
+        <!-- Bottom Buttons -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="保存" Width="80" Margin="0,0,8,0"
+                    Click="BtnSave_Click"
+                    Background="#446688CC" Foreground="White"
+                    BorderThickness="0" Padding="8,4" />
+            <Button Content="取消" Width="80"
+                    Click="BtnCancel_Click"
+                    Background="#44888888" Foreground="White"
+                    BorderThickness="0" Padding="8,4" />
+        </StackPanel>
+    </Grid>
+</Window>
