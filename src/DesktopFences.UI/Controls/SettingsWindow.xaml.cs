@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using DesktopFences.Core.Models;
 
 namespace DesktopFences.UI.Controls;
@@ -23,6 +24,7 @@ public partial class SettingsWindow : Window
     public event Action<List<ClassificationRule>>? RulesSaved;
 
     private record MatchTypeOption(string Display, string Hint, RuleMatchType Type);
+    private record TabStyleOption(string Display, TabStyle Style);
 
     private static readonly MatchTypeOption[] MatchTypeOptions =
     [
@@ -30,6 +32,14 @@ public partial class SettingsWindow : Window
         new("文件名通配符", "支持 * 和 ?，如 report*", RuleMatchType.NameGlob),
         new("正则表达式", "如 ^\\d{4}.*\\.pdf$", RuleMatchType.Regex),
         new("是文件夹", "匹配所有文件夹（无需填写模式）", RuleMatchType.IsDirectory),
+    ];
+
+    private static readonly TabStyleOption[] TabStyleOptions =
+    [
+        new("扁平 (Flat)", TabStyle.Flat),
+        new("分段 (Segmented)", TabStyle.Segmented),
+        new("圆角 (Rounded)", TabStyle.Rounded),
+        new("仅菜单 (Menu Only)", TabStyle.MenuOnly),
     ];
 
     public SettingsWindow(AppSettings settings, List<ClassificationRule> rules, List<FenceDefinition> fences)
@@ -41,6 +51,14 @@ public partial class SettingsWindow : Window
 
         LoadSettingsToUI();
         InitRuleEditor();
+    }
+
+    // ── Title Bar ─────────────────────────────────────────────
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.LeftButton == MouseButtonState.Pressed)
+            DragMove();
     }
 
     /// <summary>
@@ -66,6 +84,22 @@ public partial class SettingsWindow : Window
         ChkStartMinimized.IsChecked = _settings.StartMinimized;
         ChkCompatibilityMode.IsChecked = _settings.CompatibilityMode;
         ChkDebugLogging.IsChecked = _settings.DebugLogging;
+
+        // Tab style
+        CboTabStyle.Items.Clear();
+        foreach (var opt in TabStyleOptions)
+            CboTabStyle.Items.Add(opt);
+        CboTabStyle.DisplayMemberPath = "Display";
+        foreach (TabStyleOption opt in CboTabStyle.Items)
+        {
+            if (opt.Style == _settings.TabStyle)
+            {
+                CboTabStyle.SelectedItem = opt;
+                break;
+            }
+        }
+        if (CboTabStyle.SelectedIndex < 0 && CboTabStyle.Items.Count > 0)
+            CboTabStyle.SelectedIndex = 0;
     }
 
     private void SaveSettingsFromUI()
@@ -81,6 +115,14 @@ public partial class SettingsWindow : Window
         _settings.StartMinimized = ChkStartMinimized.IsChecked == true;
         _settings.CompatibilityMode = ChkCompatibilityMode.IsChecked == true;
         _settings.DebugLogging = ChkDebugLogging.IsChecked == true;
+
+        if (CboTabStyle.SelectedItem is TabStyleOption tabOpt)
+            _settings.TabStyle = tabOpt.Style;
+    }
+
+    private void CboTabStyle_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // No-op during load; value saved on Save button click
     }
 
     // ── Rule Editor ───────────────────────────────────────────

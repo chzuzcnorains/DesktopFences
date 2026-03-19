@@ -51,9 +51,20 @@ public partial class FencePanel : UserControl
     /// </summary>
     public event Action<string?>? PortalModeChanged;
 
+    /// <summary>
+    /// Fired when user selects a tab from the title bar menu (Menu-only mode).
+    /// Arg: tab index to activate.
+    /// </summary>
+    public event Action<int>? TabMenuSwitchRequested;
+
     private Point _dragStartPoint;
     private bool _isDraggingFile;
     private bool _isHoverExpanded;
+
+    /// <summary>
+    /// Set by FenceHost when in MenuOnly tab mode to provide tab titles.
+    /// </summary>
+    public IReadOnlyList<(string Title, int Index, bool IsActive)>? MenuOnlyTabs { get; set; }
 
     public FencePanel()
     {
@@ -183,6 +194,25 @@ public partial class FencePanel : UserControl
     public void ShowTitleBarMenu(UIElement? placementTarget = null)
     {
         var menu = new ContextMenu();
+        ApplyDarkContextMenuStyle(menu);
+
+        // Menu-only tab mode: show tab list at top
+        if (MenuOnlyTabs is { Count: > 1 })
+        {
+            foreach (var (title, tabIdx, isActive) in MenuOnlyTabs)
+            {
+                var tabItem = new MenuItem
+                {
+                    Header = title,
+                    IsChecked = isActive,
+                    IsCheckable = false
+                };
+                var capturedIdx = tabIdx;
+                tabItem.Click += (_, _) => TabMenuSwitchRequested?.Invoke(capturedIdx);
+                menu.Items.Add(tabItem);
+            }
+            menu.Items.Add(new Separator());
+        }
 
         var renameItem = new MenuItem { Header = "重命名" };
         renameItem.Click += (_, _) => BeginRename();
@@ -269,13 +299,6 @@ public partial class FencePanel : UserControl
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 2)
-        {
-            ToggleRollup();
-            e.Handled = true;
-            return;
-        }
-
         if (e.LeftButton == MouseButtonState.Pressed)
         {
             InteractionStarted?.Invoke();
@@ -284,6 +307,11 @@ public partial class FencePanel : UserControl
             SyncPositionFromWindow();
             InteractionEnded?.Invoke();
         }
+    }
+
+    private void RollupToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleRollup();
     }
 
     private void SyncPositionFromWindow()
@@ -384,7 +412,7 @@ public partial class FencePanel : UserControl
         {
             e.Effects = DragDropEffects.Copy;
             // Subtle highlight on drag over
-            FenceBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0xAA, 0x66, 0x88, 0xCC));
+            FenceBorder.BorderBrush = (Brush)(FindResource("AccentBrush") ?? new SolidColorBrush(Color.FromArgb(0xAA, 0x66, 0x88, 0xCC)));
         }
         else
         {
@@ -396,7 +424,7 @@ public partial class FencePanel : UserControl
     private void OnDrop(object sender, DragEventArgs e)
     {
         // Reset border
-        FenceBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0x55, 0x88, 0x88, 0x88));
+        FenceBorder.BorderBrush = (Brush)(FindResource("BorderBrush") ?? new SolidColorBrush(Color.FromArgb(0x55, 0x88, 0x88, 0x88)));
 
         if (ViewModel is null) return;
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
@@ -420,18 +448,22 @@ public partial class FencePanel : UserControl
         FenceBorder.RenderTransformOrigin = new Point(0.5, 0.5);
 
         var scaleUp = new DoubleAnimation(1.0, 1.02, TimeSpan.FromMilliseconds(100));
-        var scaleDown = new DoubleAnimation(1.02, 1.0, TimeSpan.FromMilliseconds(150))
+        var scaleDown = new DoubleAnimation(1.02, 1.0, TimeSpan.FromMilliseconds(150));
+
+        scaleDown.Completed += (_, _) =>
         {
-            BeginTime = TimeSpan.FromMilliseconds(100)
+            // Clear RenderTransform to avoid visual offset with DropShadowEffect
+            FenceBorder.RenderTransform = Transform.Identity;
         };
 
-        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUp);
-        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleUp);
         scaleUp.Completed += (_, _) =>
         {
             scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleDown);
             scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleDown);
         };
+
+        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUp);
+        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleUp);
     }
 
     // ── File item interactions ────────────────────────────────
@@ -516,6 +548,36 @@ public partial class FencePanel : UserControl
         var last = ViewModel.Files.LastOrDefault();
         if (last is not null && last.Icon is null)
             last.Icon = IconExtractor.GetIcon(last.FilePath);
+
+        // Scale-in animation for newly added file item
+        AnimateNewFileItem();
+    }
+
+    private void AnimateNewFileItem()
+    {
+        // Delay to let layout update, then animate the last item container
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (ViewModel is null || ViewModel.Files.Count == 0) return;
+            var lastIndex = ViewModel.Files.Count - 1;
+            var container = FileListBox.ItemContainerGenerator.ContainerFromIndex(lastIndex) as FrameworkElement;
+            if (container is null) return;
+
+            var scale = new ScaleTransform(0.8, 0.8);
+            container.RenderTransform = scale;
+            container.RenderTransformOrigin = new Point(0.5, 0.5);
+            container.Opacity = 0;
+
+            var scaleAnim = new DoubleAnimation(0.8, 1.0, TimeSpan.FromMilliseconds(200))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            var opacityAnim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+            container.BeginAnimation(OpacityProperty, opacityAnim);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void ClearSelection()
@@ -551,7 +613,24 @@ public partial class FencePanel : UserControl
             _isHoverExpanded = false;
             RollupChanged?.Invoke(true, RolledUpHeight + 8);
         }
+        UpdateRollupArrow();
         InteractionEnded?.Invoke();
+    }
+
+    /// <summary>
+    /// Update the rollup toggle arrow direction based on current state.
+    /// </summary>
+    public void UpdateRollupArrow()
+    {
+        RollupToggleButton.Content = ViewModel?.IsRolledUp == true ? "▼" : "▲";
+    }
+
+    /// <summary>
+    /// Public entry point for FenceHost to trigger rollup toggle (e.g. from tab strip arrow).
+    /// </summary>
+    public void ToggleRollupFromHost()
+    {
+        ToggleRollup();
     }
 
     public void HoverExpand()
@@ -569,5 +648,30 @@ public partial class FencePanel : UserControl
         if (ViewModel is null || !ViewModel.IsRolledUp || !_isHoverExpanded) return;
         _isHoverExpanded = false;
         RollupChanged?.Invoke(true, RolledUpHeight + 8);
+    }
+
+    /// <summary>
+    /// Apply dark theme styles to a programmatically-created ContextMenu.
+    /// </summary>
+    internal static void ApplyDarkContextMenuStyle(ContextMenu menu)
+    {
+        if (Application.Current.TryFindResource("DarkContextMenuStyle") is Style contextMenuStyle)
+            menu.Style = contextMenuStyle;
+
+        void OnMenuOpened(object sender, RoutedEventArgs e)
+        {
+            var cm = (ContextMenu)sender;
+            var menuItemStyle = Application.Current.TryFindResource("DarkMenuItemStyle") as Style;
+            var separatorStyle = Application.Current.TryFindResource("DarkSeparatorStyle") as Style;
+            foreach (var item in cm.Items)
+            {
+                if (item is MenuItem mi && menuItemStyle is not null)
+                    mi.Style = menuItemStyle;
+                else if (item is Separator sep && separatorStyle is not null)
+                    sep.Style = separatorStyle;
+            }
+        }
+
+        menu.Opened += OnMenuOpened;
     }
 }

@@ -65,6 +65,16 @@ public sealed class DesktopIconManager
     }
 
     /// <summary>
+    /// Get the cached or freshly-found SysListView32 handle.
+    /// </summary>
+    public IntPtr GetListViewHandle()
+    {
+        if (_listViewHwnd == IntPtr.Zero)
+            _listViewHwnd = FindDesktopListView();
+        return _listViewHwnd;
+    }
+
+    /// <summary>
     /// Check if desktop icons are currently visible.
     /// </summary>
     public bool AreIconsVisible()

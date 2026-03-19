@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using DesktopFences.Core.Models;
 using DesktopFences.Shell.Desktop;
 using DesktopFences.UI.ViewModels;
 
@@ -16,6 +18,7 @@ public partial class FenceHost : Window
     private readonly List<FencePanelViewModel> _tabs = [];
     private int _activeTabIndex;
     private bool _isClosing;
+    private TabStyle _tabStyle = TabStyle.Flat;
 
 
     /// <summary>
@@ -55,11 +58,14 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         {
             viewModel.ExpandedHeight = viewModel.Height;
             Height = 38 + 8; // RolledUpHeight + margin
+            FenceContent.UpdateRollupArrow();
+            TabRollupToggleButton.Content = "▼";
         }
 
         FenceContent.InteractionEnded += OnInteractionEnded;
         FenceContent.RollupChanged += OnRollupChanged;
         FenceContent.CloseRequested += AnimateClose;
+        FenceContent.TabMenuSwitchRequested += OnTabMenuSwitch;
         TabStripBorder.MouseLeftButtonDown += TabStripBorder_MouseLeftButtonDown;
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
@@ -77,12 +83,16 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     /// Add a tab from another fence being merged into this host.
     /// Grows the window by 28px when the tab strip first appears.
     /// </summary>
-    public void AddTab(FencePanelViewModel vm)
+    public void AddTab(FencePanelViewModel vm, bool activate = true)
     {
         bool wasTabbed = _tabs.Count > 1;
         _tabs.Add(vm);
-        _activeTabIndex = _tabs.Count - 1;
-        ActivatePanelForTab(_activeTabIndex);
+
+        if (activate)
+        {
+            _activeTabIndex = _tabs.Count - 1;
+            ActivatePanelForTab(_activeTabIndex);
+        }
 
         if (!wasTabbed)
             Height += 28; // first tab strip appearance
@@ -132,12 +142,40 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     private void ActivatePanelForTab(int index)
     {
         var vm = _tabs[index];
-        FenceContent.DataContext = vm;
-        DataContext = vm;
-        if (_iconExtractor is not null)
-            FenceContent.IconExtractor = _iconExtractor;
-        FenceContent.LoadAllIcons();
-        SyncTabStripBackground();
+
+        // Tab switch fade animation (150ms)
+        if (FenceContent.IsLoaded && FenceContent.Opacity > 0)
+        {
+            var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(75))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
+            };
+            fadeOut.Completed += (_, _) =>
+            {
+                FenceContent.DataContext = vm;
+                DataContext = vm;
+                if (_iconExtractor is not null)
+                    FenceContent.IconExtractor = _iconExtractor;
+                FenceContent.LoadAllIcons();
+                SyncTabStripBackground();
+
+                var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(75))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                FenceContent.BeginAnimation(OpacityProperty, fadeIn);
+            };
+            FenceContent.BeginAnimation(OpacityProperty, fadeOut);
+        }
+        else
+        {
+            FenceContent.DataContext = vm;
+            DataContext = vm;
+            if (_iconExtractor is not null)
+                FenceContent.IconExtractor = _iconExtractor;
+            FenceContent.LoadAllIcons();
+            SyncTabStripBackground();
+        }
     }
 
     /// <summary>
@@ -150,9 +188,34 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             TabStripBorder.Background = bg;
     }
 
+    /// <summary>
+    /// Set the tab style and refresh the strip.
+    /// </summary>
+    public void SetTabStyle(TabStyle style)
+    {
+        _tabStyle = style;
+        RefreshTabStrip();
+    }
+
     private void RefreshTabStrip()
     {
         bool showTabs = _tabs.Count > 1;
+
+        // MenuOnly: hide tab strip, show title bar with dropdown arrow
+        if (_tabStyle == TabStyle.MenuOnly && showTabs)
+        {
+            TabRow.Height = new GridLength(0);
+            FenceContent.ShowTitleBar = true;
+            TabStrip.Items.Clear();
+            // Populate tab info for the title bar menu
+            FenceContent.MenuOnlyTabs = _tabs.Select((t, i) =>
+                (t.Title, i, i == _activeTabIndex)).ToList();
+            return;
+        }
+
+        // Clear MenuOnly data when not in MenuOnly mode
+        FenceContent.MenuOnlyTabs = null;
+
         TabRow.Height = showTabs ? new GridLength(28) : new GridLength(0);
         FenceContent.ShowTitleBar = !showTabs;
 
@@ -163,23 +226,47 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         {
             var idx = i;
             bool isActive = i == _activeTabIndex;
+            bool isLast = i == _tabs.Count - 1;
 
             var btn = new Button
             {
                 Content = _tabs[i].Title,
-                Padding = new Thickness(10, 0, 10, 0),
-                Height = 26,
-                BorderThickness = new Thickness(0),
-                Background = isActive
-                    ? new SolidColorBrush(Color.FromArgb(0x99, 0x44, 0x66, 0x99))
-                    : new SolidColorBrush(Color.FromArgb(0x33, 0x88, 0x88, 0x88)),
                 Foreground = isActive
                     ? new SolidColorBrush(Color.FromArgb(0xFF, 0xEE, 0xEE, 0xEE))
                     : new SolidColorBrush(Color.FromArgb(0xAA, 0xCC, 0xCC, 0xCC)),
-                FontSize = 13,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Bottom,
+                Cursor = Cursors.Hand,
             };
+
+            // Apply style based on current tab style
+            var (activeKey, inactiveKey) = _tabStyle switch
+            {
+                TabStyle.Segmented => ("SegmentedTabButtonActiveStyle", "SegmentedTabButtonStyle"),
+                TabStyle.Rounded => ("RoundedTabButtonActiveStyle", "RoundedTabButtonStyle"),
+                _ => ("FlatTabButtonActiveStyle", "FlatTabButtonStyle") // Flat default
+            };
+
+            var styleKey = isActive ? activeKey : inactiveKey;
+            if (TryFindResource(styleKey) is Style tabBtnStyle)
+            {
+                btn.Style = tabBtnStyle;
+            }
+            else
+            {
+                // Fallback inline styling
+                btn.Padding = new Thickness(10, 0, 10, 0);
+                btn.Height = 26;
+                btn.BorderThickness = new Thickness(0);
+                btn.FontSize = 13;
+                btn.VerticalAlignment = VerticalAlignment.Bottom;
+            }
+
+            btn.Background = isActive
+                ? new SolidColorBrush(Color.FromArgb(0x33, 0x88, 0x88, 0x88))
+                : Brushes.Transparent;
+
+            // For segmented style: remove right border on last item
+            if (_tabStyle == TabStyle.Segmented && isLast)
+                btn.BorderThickness = new Thickness(0);
 
             btn.Click += (_, _) =>
             {
@@ -190,11 +277,22 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
             TabStrip.Items.Add(btn);
         }
+
+        // Apply segmented container rounding
+        if (_tabStyle == TabStyle.Segmented)
+        {
+            TabStripBorder.CornerRadius = new CornerRadius(6, 6, 0, 0);
+        }
+        else
+        {
+            TabStripBorder.CornerRadius = new CornerRadius(8, 8, 0, 0);
+        }
     }
 
     private void TabMenuButton_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu();
+        FencePanel.ApplyDarkContextMenuStyle(menu);
 
         var renameItem = new MenuItem { Header = "重命名" };
         renameItem.Click += (_, _) =>
@@ -246,6 +344,16 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
         menu.PlacementTarget = sender as UIElement;
         menu.IsOpen = true;
+    }
+
+    private void OnTabMenuSwitch(int tabIndex)
+    {
+        if (tabIndex >= 0 && tabIndex < _tabs.Count && tabIndex != _activeTabIndex)
+        {
+            _activeTabIndex = tabIndex;
+            ActivatePanelForTab(tabIndex);
+            RefreshTabStrip();
+        }
     }
 
     // ── Tab strip drag to move window ──────────────────────
@@ -304,6 +412,12 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
     // ── Rollup ───────────────────────────────────────────────
 
+    private void TabRollupToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Delegate to FencePanel's ToggleRollup via the public toggle method
+        FenceContent.ToggleRollupFromHost();
+    }
+
     private void OnRollupChanged(bool isRolledUp, double targetHeight)
     {
         var animation = new DoubleAnimation
@@ -313,6 +427,10 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
         };
         BeginAnimation(HeightProperty, animation);
+
+        // Sync arrow state on both title bar and tab strip
+        FenceContent.UpdateRollupArrow();
+        TabRollupToggleButton.Content = isRolledUp ? "▼" : "▲";
     }
 
     private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)

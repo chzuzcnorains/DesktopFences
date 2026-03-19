@@ -27,13 +27,42 @@
                 BorderThickness="1,1,1,0"
                 Margin="0,0,0,-1">
             <Grid>
-                <ItemsControl x:Name="TabStrip" Margin="0,0,30,0">
+                <ItemsControl x:Name="TabStrip" Margin="0,0,58,0">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
+                <Button x:Name="TabRollupToggleButton"
+                        Content="▲"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="26" Height="22"
+                        Margin="0,0,30,0"
+                        FontSize="9"
+                        Foreground="#AACCCCCC"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="TabRollupToggleButton_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg"
+                                    Background="Transparent"
+                                    CornerRadius="4"
+                                    Padding="2,0">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
                 <Button x:Name="TabMenuButton"
                         Content="⋯"
                         HorizontalAlignment="Right"

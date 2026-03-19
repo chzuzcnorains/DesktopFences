@@ -31,9 +31,9 @@
     <Grid>
         <!-- Main fence body -->
         <Border x:Name="FenceBorder"
-                Background="#CC1E1E2E"
+                Background="{DynamicResource FenceBackgroundBrush}"
                 Style="{StaticResource FenceBorderStyle}"
-                BorderBrush="#55888888"
+                BorderBrush="{DynamicResource BorderBrush}"
                 Opacity="{Binding FenceOpacity, FallbackValue=1.0}">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.4" />
@@ -47,7 +47,7 @@
                 <!-- Title Bar (drag handle + rename) -->
                 <Border x:Name="TitleBarBorder" Grid.Row="0"
                         Style="{StaticResource TitleBarVisibilityStyle}"
-                        Background="#44FFFFFF"
+                        Background="{DynamicResource TitleBarBrush}"
                         CornerRadius="6,6,0,0"
                         MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
                         ToolTip="{Binding PortalDisplayPath}"
@@ -55,11 +55,46 @@
                     <Grid>
                         <TextBlock x:Name="TitleText"
                                    Text="{Binding Title, FallbackValue='新建 Fence'}"
-                                   Foreground="#DDEEEEEE"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
                                    FontSize="13"
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
-                                   Margin="12,0,32,0" />
+                                   Margin="12,0,60,0" />
+                        <Button x:Name="RollupToggleButton"
+                                Content="▲"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Width="28" Height="24"
+                                Margin="0,0,30,0"
+                                FontSize="10"
+                                Foreground="{DynamicResource TextSecondaryBrush}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                Click="RollupToggleButton_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bg"
+                                                        Background="Transparent"
+                                                        CornerRadius="4"
+                                                        Padding="2,0">
+                                                    <ContentPresenter HorizontalAlignment="Center"
+                                                                      VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                         <Button x:Name="TitleMenuButton"
                                 Content="⋯"
                                 HorizontalAlignment="Right"
@@ -67,7 +102,7 @@
                                 Width="28" Height="24"
                                 Margin="0,0,4,0"
                                 FontSize="14" FontWeight="Bold"
-                                Foreground="#AACCCCCC"
+                                Foreground="{DynamicResource TextSecondaryBrush}"
                                 Background="Transparent"
                                 BorderThickness="0"
                                 Cursor="Hand"
@@ -148,7 +183,7 @@
                                            HorizontalAlignment="Center"
                                            RenderOptions.BitmapScalingMode="HighQuality" />
                                     <TextBlock Text="{Binding DisplayName}"
-                                               Foreground="#DDEEEEEE"
+                                               Foreground="{DynamicResource TextPrimaryBrush}"
                                                FontSize="11"
                                                TextAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
@@ -158,9 +193,13 @@
                                 </StackPanel>
                             </Border>
                             <DataTemplate.Triggers>
+                                <Trigger SourceName="ItemBorder" Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ItemBorder"
+                                            Property="Background" Value="{DynamicResource HoverBrush}" />
+                                </Trigger>
                                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                     <Setter TargetName="ItemBorder"
-                                            Property="Background" Value="#446688CC" />
+                                            Property="Background" Value="{DynamicResource SelectedBrush}" />
                                 </DataTrigger>
                             </DataTemplate.Triggers>
                         </DataTemplate>
@@ -169,7 +208,7 @@
 
                 <!-- Empty state hint -->
                 <TextBlock Grid.Row="1"
-                           Foreground="#44FFFFFF"
+                           Foreground="{DynamicResource SubtleBorderBrush}"
                            FontSize="12"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center">

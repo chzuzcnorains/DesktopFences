@@ -1,0 +1,13 @@
+<Window x:Class="DesktopFences.UI.Controls.DesktopIconOverlay"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DesktopIconOverlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Topmost="False">
+    <!-- Canvas with null background for click-through on empty areas -->
+    <Canvas x:Name="IconCanvas" Background="{x:Null}" />
+</Window>

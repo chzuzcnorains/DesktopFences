@@ -87,3 +87,7 @@ DesktopFences.Core   → 纯 C# 模型、规则引擎、布局持久化（无 UI
 Phase 6 新增：动画系统（淡入/淡出/拖入脉冲）、每 Fence 主题（BackgroundColor/TitleBarColor/TextColor/Opacity）、AppSettings 全局设置模型、SettingsWindow 设置界面、SearchHotkeyManager（Ctrl+\` 全局热键）+ SearchWindow 快捷搜索、ListBox 虚拟化 + IsAsync 图标异步加载、StartupManager（HKCU Run 开机自启）、win-x64 自包含单文件发布配置。
 
 Phase 7 新增：Tab 标签组功能（多 Fence 合并为标签页、拖拽排序、拖拽合并/拆分、右键分离）、TabGroupId/TabOrder 数据模型、Tab 条与 Panel 边框无缝衔接、多 Tab 时隐藏 Panel 标题栏、设置窗口滚动条样式优化（≤5px）。
+
+Phase 9a 新增：应用程序图标（多尺寸 ICO）、DarkTheme.xaml 主题资源字典（颜色/Brush + Button/TextBox/ComboBox/CheckBox/Slider/ListBoxItem/ScrollBar 暗色样式）。
+
+Phase 9b 新增：FencePanel/SettingsWindow/SearchWindow/RenameWindow 硬编码颜色替换为 DynamicResource 引用、SettingsWindow 无边框改造（WindowStyle=None + 自定义标题栏 + DropShadow + 所有控件应用 DarkTheme 样式）、Tab 切换 150ms fade 动画、文件项 Scale 0.8→1.0 弹入动画、TabStyle 枚举（Flat/Segmented/Rounded/MenuOnly）+ TabStyles.xaml 样式资源 + 设置界面标签页样式选择。

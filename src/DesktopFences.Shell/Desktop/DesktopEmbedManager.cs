@@ -22,6 +22,7 @@ public sealed class DesktopEmbedManager : IDisposable
     private NativeMethods.WinEventDelegate? _winEventProc;
     private bool _isTopmost;
     private bool _isPeekActive;
+    private bool _pendingTopmost;   // true while 300ms timer is in-flight
     private bool _winKeyDown;
     private System.Timers.Timer? _showDesktopTimer;
     private System.Timers.Timer? _zOrderRecoveryTimer;
@@ -167,14 +168,42 @@ public sealed class DesktopEmbedManager : IDisposable
 
         _showDesktopTimer?.Stop();
         _showDesktopTimer?.Dispose();
+        _showDesktopTimer = null;
 
-        // Delay to let Explorer finish ShowDesktop, then bring to top
+        if (_isTopmost)
+        {
+            // Was topmost → go back to bottom
+            _pendingTopmost = false;
+            SetAllBottom();
+            StatusChanged?.Invoke("BOTTOM (Win+D restore)");
+            return;
+        }
+
+        if (_pendingTopmost)
+        {
+            // Timer was in-flight → user pressed Win+D again before it fired.
+            // This means Explorer toggled back (restore windows), so cancel the topmost transition.
+            _pendingTopmost = false;
+            // Ensure windows are in a consistent bottom state
+            SetAllBottom();
+            StatusChanged?.Invoke("BOTTOM (Win+D cancelled)");
+            return;
+        }
+
+        // First Win+D press (show desktop) — delay to let Explorer finish, then bring to top
+        _pendingTopmost = true;
         _showDesktopTimer = new System.Timers.Timer(300);
         _showDesktopTimer.AutoReset = false;
         _showDesktopTimer.Elapsed += (_, _) =>
         {
-            SetAllTopmost();
-            StatusChanged?.Invoke("TOPMOST (Win+D survived)");
+            // Dispatch to UI thread to avoid cross-thread races with _isTopmost and SetWindowPos
+            _dispatcher?.BeginInvoke(() =>
+            {
+                if (!_pendingTopmost) return; // cancelled by a rapid second press
+                _pendingTopmost = false;
+                SetAllTopmost();
+                StatusChanged?.Invoke("TOPMOST (Win+D survived)");
+            });
         };
         _showDesktopTimer.Start();
     }
@@ -191,6 +220,9 @@ public sealed class DesktopEmbedManager : IDisposable
     {
         // Don't auto-dismiss during Peek mode — Peek is dismissed by hotkey/Escape
         if (_isPeekActive) return;
+
+        // Don't interfere while Win+D topmost transition is pending
+        if (_pendingTopmost) return;
 
         // If the activated window is one of our managed windows, ignore
         if (_managedWindows.Contains(hwnd)) return;
@@ -221,7 +253,7 @@ public sealed class DesktopEmbedManager : IDisposable
         _foregroundDebounceTimer?.Stop();
         _foregroundDebounceTimer!.Tick -= OnDebouncedForegroundRecovery;
 
-        if (_isTopmost || _isPeekActive) return;
+        if (_isTopmost || _isPeekActive || _pendingTopmost) return;
 
         foreach (var w in _managedWindows)
             SendToBottom(w);

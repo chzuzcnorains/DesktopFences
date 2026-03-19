@@ -11,6 +11,7 @@ public class AppSettings
     public string DefaultTextColor { get; set; } = "#DDEEEEEE";
     public double DefaultOpacity { get; set; } = 1.0;
     public double TitleBarFontSize { get; set; } = 13;
+    public TabStyle TabStyle { get; set; } = TabStyle.Flat;
 
     // Behavior
     public int SnapThreshold { get; set; } = 10;
