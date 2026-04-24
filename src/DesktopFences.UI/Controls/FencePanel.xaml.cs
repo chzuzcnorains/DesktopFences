@@ -112,6 +112,16 @@ public partial class FencePanel : UserControl
     }
 
     /// <summary>
+    /// Force the file ListBox to re-run ItemTemplateSelector. Call after changing
+    /// the global UseCustomFileIcons Application resource so every file item
+    /// switches between custom tiles and Shell icons in place.
+    /// </summary>
+    public void RefreshFileTileTemplate()
+    {
+        FileListBox?.Items.Refresh();
+    }
+
+    /// <summary>
     /// Apply default colors from global settings (used when fence has no custom colors).
     /// </summary>
     public void ApplyDefaultTheme(string bgColor, string titleColor, string textColor, double fontSize)
@@ -223,24 +233,40 @@ public partial class FencePanel : UserControl
         // Folder Portal options
         if (ViewModel?.IsPortalMode == true)
         {
-            var changePortalItem = new MenuItem { Header = $"更改映射文件夹 ({ViewModel.PortalPath})" };
+            var changePortalItem = new MenuItem
+            {
+                Header = $"更改映射文件夹 ({ViewModel.PortalPath})",
+                Icon = BuildMenuIcon("IconPortal"),
+            };
             changePortalItem.Click += (_, _) => BrowseAndSetPortalPath();
             menu.Items.Add(changePortalItem);
 
-            var clearPortalItem = new MenuItem { Header = "取消文件夹映射" };
+            var clearPortalItem = new MenuItem
+            {
+                Header = "取消文件夹映射",
+                Icon = BuildMenuIcon("IconHide"),
+            };
             clearPortalItem.Click += (_, _) => ClearPortalMode();
             menu.Items.Add(clearPortalItem);
         }
         else
         {
-            var setPortalItem = new MenuItem { Header = "设为文件夹映射..." };
+            var setPortalItem = new MenuItem
+            {
+                Header = "设为文件夹映射...",
+                Icon = BuildMenuIcon("IconPortal"),
+            };
             setPortalItem.Click += (_, _) => BrowseAndSetPortalPath();
             menu.Items.Add(setPortalItem);
         }
 
         menu.Items.Add(new Separator());
 
-        var closeItem = new MenuItem { Header = "关闭 Fence" };
+        var closeItem = new MenuItem
+        {
+            Header = "关闭 Fence",
+            Icon = BuildMenuIcon("IconTrash"),
+        };
         closeItem.Click += (_, _) => CloseRequested?.Invoke();
         menu.Items.Add(closeItem);
 
@@ -619,10 +645,12 @@ public partial class FencePanel : UserControl
 
     /// <summary>
     /// Update the rollup toggle arrow direction based on current state.
+    /// Icon is IconRollup; rotate 180° when rolled up.
     /// </summary>
     public void UpdateRollupArrow()
     {
-        RollupToggleButton.Content = ViewModel?.IsRolledUp == true ? "▼" : "▲";
+        if (RollupIcon.RenderTransform is RotateTransform rt)
+            rt.Angle = ViewModel?.IsRolledUp == true ? 180 : 0;
     }
 
     /// <summary>
@@ -648,6 +676,28 @@ public partial class FencePanel : UserControl
         if (ViewModel is null || !ViewModel.IsRolledUp || !_isHoverExpanded) return;
         _isHoverExpanded = false;
         RollupChanged?.Invoke(true, RolledUpHeight + 8);
+    }
+
+    /// <summary>
+    /// Build a ContentControl icon (from Icons.xaml resources) suitable for MenuItem.Icon.
+    /// Using ContentControl + IconTemplate preserves the Foreground inheritance chain so
+    /// icons pick up the correct theme brush; a bare Path would break that.
+    /// </summary>
+    internal static UIElement? BuildMenuIcon(string geometryKey)
+    {
+        var app = Application.Current;
+        if (app is null) return null;
+        if (app.TryFindResource("IconTemplate") is not ControlTemplate template) return null;
+        if (app.TryFindResource(geometryKey) is not Geometry geometry) return null;
+        var brush = app.TryFindResource("TextSecondaryBrush") as Brush;
+        return new ContentControl
+        {
+            Template = template,
+            Tag = geometry,
+            Width = 14,
+            Height = 14,
+            Foreground = brush ?? Brushes.LightGray,
+        };
     }
 
     /// <summary>

@@ -1,0 +1,28 @@
+<!--
+    DesktopFences.UI / Themes / FileTile.xaml
+
+    共享给 FencePanel 文件项 DataTemplate 的数值资源 + Converter 实例。
+    具体的 DataTemplate（Custom / Shell 两种）定义在 FencePanel.xaml 里，
+    因为它们需要绑定鼠标事件到 code-behind 的处理器，跨资源字典不方便。
+
+    - FileTileIconSize / FileTileWidth / FileTileHeight
+        由 AppSettings.IconSize 驱动（App 启动 + 设置变更时更新全局资源）。
+        tile 宽 = icon + 44；高 = icon + 52；默认 44 → 88 / 96。
+    - KindToIcon / LabelLenToSize
+        Converter 实例，供 DataTemplate 里的 Binding 使用。
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib"
+                    xmlns:conv="clr-namespace:DesktopFences.UI.Converters">
+
+    <!-- ═════ 可通过 DynamicResource 覆盖的默认值 ═════ -->
+    <sys:Double x:Key="FileTileIconSize">44</sys:Double>
+    <sys:Double x:Key="FileTileWidth">88</sys:Double>
+    <sys:Double x:Key="FileTileHeight">96</sys:Double>
+
+    <!-- ═════ Converter 实例 ═════ -->
+    <conv:FileKindToIconConverter x:Key="KindToIcon"/>
+    <conv:LabelLenToFontSizeConverter x:Key="LabelLenToSize"/>
+
+</ResourceDictionary>
