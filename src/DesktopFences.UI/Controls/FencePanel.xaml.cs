@@ -437,8 +437,7 @@ public partial class FencePanel : UserControl
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             e.Effects = DragDropEffects.Copy;
-            // Subtle highlight on drag over
-            FenceBorder.BorderBrush = (Brush)(FindResource("AccentBrush") ?? new SolidColorBrush(Color.FromArgb(0xAA, 0x66, 0x88, 0xCC)));
+            if (ViewModel is not null) ViewModel.IsDropHover = true;
         }
         else
         {
@@ -447,10 +446,14 @@ public partial class FencePanel : UserControl
         e.Handled = true;
     }
 
+    private void OnDragLeave(object sender, DragEventArgs e)
+    {
+        if (ViewModel is not null) ViewModel.IsDropHover = false;
+    }
+
     private void OnDrop(object sender, DragEventArgs e)
     {
-        // Reset border
-        FenceBorder.BorderBrush = (Brush)(FindResource("BorderBrush") ?? new SolidColorBrush(Color.FromArgb(0x55, 0x88, 0x88, 0x88)));
+        if (ViewModel is not null) ViewModel.IsDropHover = false;
 
         if (ViewModel is null) return;
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
@@ -465,6 +468,37 @@ public partial class FencePanel : UserControl
         // Scale-in animation for the border on drop
         AnimateDropPulse();
         e.Handled = true;
+    }
+
+    // ── Focus glow: subscribe to host window activation ─────────
+
+    private Window? _hostWindow;
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _hostWindow = Window.GetWindow(this);
+        if (_hostWindow is null) return;
+        _hostWindow.Activated += OnHostActivated;
+        _hostWindow.Deactivated += OnHostDeactivated;
+        if (ViewModel is not null) ViewModel.IsFocused = _hostWindow.IsActive;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_hostWindow is null) return;
+        _hostWindow.Activated -= OnHostActivated;
+        _hostWindow.Deactivated -= OnHostDeactivated;
+        _hostWindow = null;
+    }
+
+    private void OnHostActivated(object? sender, EventArgs e)
+    {
+        if (ViewModel is not null) ViewModel.IsFocused = true;
+    }
+
+    private void OnHostDeactivated(object? sender, EventArgs e)
+    {
+        if (ViewModel is not null) ViewModel.IsFocused = false;
     }
 
     private void AnimateDropPulse()

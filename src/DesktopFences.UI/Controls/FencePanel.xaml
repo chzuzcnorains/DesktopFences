@@ -6,7 +6,10 @@
              x:Name="Root"
              AllowDrop="True"
              Drop="OnDrop"
-             DragOver="OnDragOver">
+             DragOver="OnDragOver"
+             DragLeave="OnDragLeave"
+             Loaded="OnLoaded"
+             Unloaded="OnUnloaded">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
@@ -126,26 +129,73 @@
         </Style>
         <!-- When ShowTitleBar=False (tabs visible), remove top corners -->
         <Style x:Key="FenceBorderStyle" TargetType="{x:Type Border}">
-            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ShowTitleBar, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
-                    <Setter Property="CornerRadius" Value="0,0,8,8"/>
+                    <Setter Property="CornerRadius" Value="0,0,10,10"/>
                     <Setter Property="BorderThickness" Value="1,0,1,1"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
     <Grid>
+        <!-- Outer glow border: accent / merge-target colored halo driven by VM flags.
+             Rendered behind FenceBorder (same bounds) and carries the DropShadow.
+             Invisible when no focus / drop / merge state is active. -->
+        <Border x:Name="GlowBorder"
+                Background="Transparent"
+                BorderBrush="Transparent"
+                IsHitTestVisible="False">
+            <Border.Style>
+                <Style TargetType="{x:Type Border}" BasedOn="{StaticResource FenceBorderStyle}">
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0" />
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsMergeTarget}" Value="True">
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="#6BD49A" BlurRadius="26" ShadowDepth="0" Opacity="0.55"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsDropHover}" Value="True">
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="#7AA7E6" BlurRadius="20" ShadowDepth="0" Opacity="0.55"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                            <Setter Property="Effect">
+                                <Setter.Value>
+                                    <DropShadowEffect Color="#7AA7E6" BlurRadius="14" ShadowDepth="0" Opacity="0.35"/>
+                                </Setter.Value>
+                            </Setter>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+
         <!-- Main fence body -->
         <Border x:Name="FenceBorder"
                 Background="{DynamicResource FenceBackgroundBrush}"
-                Style="{StaticResource FenceBorderStyle}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                Opacity="{Binding FenceOpacity, FallbackValue=1.0}">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.4" />
-            </Border.Effect>
+                BorderBrush="{DynamicResource FenceBorderBrush}"
+                Opacity="{Binding FenceOpacity, FallbackValue=1.0}"
+                Effect="{StaticResource FenceShadowEffect}">
+            <Border.Style>
+                <Style TargetType="{x:Type Border}" BasedOn="{StaticResource FenceBorderStyle}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsFocused}" Value="True">
+                            <Setter Property="BorderBrush" Value="{DynamicResource FenceBorderStrongBrush}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="30" />

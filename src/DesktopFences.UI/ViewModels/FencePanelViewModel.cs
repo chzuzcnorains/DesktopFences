@@ -25,6 +25,9 @@ public class FencePanelViewModel : ViewModelBase
     private ViewMode _viewMode = ViewMode.Icon;
     private SortField _sortBy = SortField.Name;
     private SortDirection _sortDirection = SortDirection.Ascending;
+    private bool _isFocused;
+    private bool _isDropHover;
+    private bool _isMergeTarget;
 
     public ObservableCollection<FileItemViewModel> Files { get; } = [];
 
@@ -275,6 +278,37 @@ public class FencePanelViewModel : ViewModelBase
     {
         try { return selector(f); }
         catch { return 0; }
+    }
+
+    /// <summary>
+    /// True when the containing fence window has keyboard / activation focus.
+    /// Drives the accent-color border glow on FencePanel.
+    /// </summary>
+    public bool IsFocused
+    {
+        get => _isFocused;
+        set => SetProperty(ref _isFocused, value);
+    }
+
+    /// <summary>
+    /// True while a drag-drop is hovering over this fence (files being
+    /// dropped). Drives a softer accent glow to signal a valid target.
+    /// </summary>
+    public bool IsDropHover
+    {
+        get => _isDropHover;
+        set => SetProperty(ref _isDropHover, value);
+    }
+
+    /// <summary>
+    /// True when another fence is being dragged over this one with sufficient
+    /// overlap to be merged into this fence as a new tab.
+    /// Drives the teal merge-target glow.
+    /// </summary>
+    public bool IsMergeTarget
+    {
+        get => _isMergeTarget;
+        set => SetProperty(ref _isMergeTarget, value);
     }
 
     public const double MinWidth = 120;
