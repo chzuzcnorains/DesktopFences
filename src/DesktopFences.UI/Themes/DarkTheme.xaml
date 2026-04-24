@@ -2,37 +2,55 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ══════════════════════════════════════════════════════
-         Color Resources
+         Color Resources — v2 prototype (OKLCH-derived sRGB)
          ══════════════════════════════════════════════════════ -->
-    <Color x:Key="FenceBaseColor">#1E1E2E</Color>
-    <Color x:Key="AccentColor">#6688CC</Color>
+    <Color x:Key="FenceBaseColor">#1A2036</Color>
+    <Color x:Key="FenceBgHueColor">#1A2036</Color>
+    <Color x:Key="AccentColor">#7AA7E6</Color>
+    <Color x:Key="AccentStrongColor">#5A82DC</Color>
     <Color x:Key="SurfaceColor">#2A2A3E</Color>
-    <Color x:Key="TextPrimaryColor">#EEEEEE</Color>
-    <Color x:Key="TextSecondaryColor">#AACCCCCC</Color>
+    <Color x:Key="TextPrimaryColor">#E8ECF4</Color>
+    <Color x:Key="TextSecondaryColor">#AEB8CC</Color>
+    <Color x:Key="TextFaintColor">#7B8296</Color>
     <Color x:Key="BorderColor">#55888888</Color>
     <Color x:Key="HoverColor">#22FFFFFF</Color>
     <Color x:Key="PressColor">#33FFFFFF</Color>
-    <Color x:Key="SelectedColor">#446688CC</Color>
-    <Color x:Key="DangerColor">#CC4444</Color>
+    <Color x:Key="SelectedColor">#4A7AA7E6</Color>
+    <Color x:Key="DangerColor">#E0412B</Color>
+    <Color x:Key="MergeTargetColor">#6BD49A</Color>
 
     <!-- Brush Resources -->
     <SolidColorBrush x:Key="FenceBaseBrush" Color="{StaticResource FenceBaseColor}" />
-    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentStrongBrush" Color="{DynamicResource AccentStrongColor}" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+    <SolidColorBrush x:Key="TextFaintBrush" Color="{StaticResource TextFaintColor}" />
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
     <SolidColorBrush x:Key="HoverBrush" Color="{StaticResource HoverColor}" />
     <SolidColorBrush x:Key="PressBrush" Color="{StaticResource PressColor}" />
     <SolidColorBrush x:Key="SelectedBrush" Color="{StaticResource SelectedColor}" />
     <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+    <SolidColorBrush x:Key="MergeTargetBrush" Color="{StaticResource MergeTargetColor}" />
 
     <!-- Semi-transparent variants -->
-    <SolidColorBrush x:Key="FenceBackgroundBrush" Color="#CC1E1E2E" />
+    <SolidColorBrush x:Key="FenceBackgroundBrush" Color="#CC1A2036" />
     <SolidColorBrush x:Key="TitleBarBrush" Color="#44FFFFFF" />
+    <SolidColorBrush x:Key="TitleBarActiveBrush" Color="#594E78B8" />
     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#22FFFFFF" />
     <SolidColorBrush x:Key="SubtleBorderBrush" Color="#33FFFFFF" />
-    <SolidColorBrush x:Key="FocusBorderBrush" Color="#887799CC" />
+    <SolidColorBrush x:Key="FenceBorderBrush" Color="#17FFFFFF" />
+    <SolidColorBrush x:Key="FenceBorderStrongBrush" Color="#2EFFFFFF" />
+    <SolidColorBrush x:Key="FocusBorderBrush" Color="#887AA7E6" />
+
+    <!-- Shared soft shadow used by Fence body (32px blur, 45% opacity). -->
+    <DropShadowEffect x:Key="FenceShadowEffect"
+                      BlurRadius="32"
+                      ShadowDepth="12"
+                      Direction="270"
+                      Opacity="0.45"
+                      Color="Black" />
 
     <!-- ══════════════════════════════════════════════════════
          Button Styles
@@ -498,8 +516,7 @@
                                               ContentSource="Icon"
                                               Width="16" Height="16"
                                               Margin="0,0,6,0"
-                                              VerticalAlignment="Center"
-                                              Visibility="Collapsed" />
+                                              VerticalAlignment="Center" />
                             <ContentPresenter Grid.Column="1"
                                               ContentSource="Header"
                                               RecognizesAccessKey="True"
