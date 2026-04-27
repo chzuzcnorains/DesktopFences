@@ -1,0 +1,200 @@
+<!-- ══════════════════════════════════════════════════════════════
+     DesktopFences.UI / Themes / FileTypes.xaml
+     
+     14 文件类型图标的 DrawingImage 资源。
+     
+     USAGE:
+         <Image Source="{StaticResource FileIconPdf}" Width="24" Height="24"/>
+     
+     动态绑定示例（ViewModel 暴露 FileKind 字符串，用 StringToResourceConverter）:
+         <Image Source="{Binding Kind, Converter={StaticResource KindToIcon}}"
+                Width="24" Height="24"/>
+     
+     Key 命名：FileIcon{Pascal} — FileIconFolder, FileIconDoc, FileIconPdf ...
+     ══════════════════════════════════════════════════════════════ -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ───── Page brush (白色纸面，所有文档复用) ───── -->
+    <LinearGradientBrush x:Key="FtPageBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#E8ECF4" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="FtPageStroke" Color="#2E3A4F" Opacity="0.18"/>
+    <SolidColorBrush x:Key="FtFoldFill" Color="#2E3A4F" Opacity="0.12"/>
+
+    <!-- ───── Per-type tab gradients ───── -->
+    <LinearGradientBrush x:Key="FtTabDoc"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#4A85D8" Offset="0"/><GradientStop Color="#2E5AB5" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabXls"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#3FB978" Offset="0"/><GradientStop Color="#208B52" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabPpt"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#E3643A" Offset="0"/><GradientStop Color="#B03E18" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabPdf"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#E15340" Offset="0"/><GradientStop Color="#B22419" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabImg"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#C24DB8" Offset="0"/><GradientStop Color="#8A248E" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabVideo" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#D94A74" Offset="0"/><GradientStop Color="#A0234A" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabMusic" StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#8860CF" Offset="0"/><GradientStop Color="#5A339B" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabCode"  StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#2FA3B5" Offset="0"/><GradientStop Color="#106E82" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabZip"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#9BB543" Offset="0"/><GradientStop Color="#6B8318" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabExe"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#5377C7" Offset="0"/><GradientStop Color="#2D4FA0" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabTxt"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#7F8B9F" Offset="0"/><GradientStop Color="#4F5A6C" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabLink"  StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#4090C8" Offset="0"/><GradientStop Color="#1E6698" Offset="1"/></LinearGradientBrush>
+    <LinearGradientBrush x:Key="FtTabTtf"   StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#3FAAB5" Offset="0"/><GradientStop Color="#167480" Offset="1"/></LinearGradientBrush>
+
+    <!-- ───── Folder (manila, 独立造型) ───── -->
+    <LinearGradientBrush x:Key="FtFolderBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#E9C268" Offset="0"/>
+        <GradientStop Color="#B27E2C" Offset="1"/>
+    </LinearGradientBrush>
+
+    <DrawingImage x:Key="FileIconFolder">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+                <GeometryDrawing Brush="{StaticResource FtFolderBrush}">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 4 14 Q 4 10 8 10 L 18 10 L 22 14 L 40 14 Q 44 14 44 18 L 44 36 Q 44 40 40 40 L 8 40 Q 4 40 4 36 Z"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen><Pen Thickness="1.2"><Pen.Brush><SolidColorBrush Color="White" Opacity="0.4"/></Pen.Brush></Pen></GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry><PathGeometry Figures="M 4 16 L 44 16"/></GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ───── 文档基础几何（所有文档共享）─────
+         页面路径 + 折角阴影 — 通过 ResourceKey 复用不方便，直接内嵌 -->
+
+    <!-- 宏：定义一个文档图标要 3 个 drawing: page, fold, tab + text
+         WPF 不支持模板递归，因此 14 个 DrawingImage 各自独立写出。
+         每个字符位置参考原 SVG: 文字在 (22, 37)，tab 在 (8, 28, 28x12, rx=2) -->
+
+    <!-- doc / W -->
+    <DrawingImage x:Key="FileIconDoc">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+                <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtTabDoc}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GlyphRunDrawing ForegroundBrush="White"><GlyphRunDrawing.GlyphRun><GlyphRun BaselineOrigin="18.5,37" FontRenderingEmSize="10.5" CaretStops="{x:Null}" ClusterMap="0" Characters="W" GlyphIndices="58" AdvanceWidths="9" IsSideways="False" BidiLevel="0"><GlyphRun.GlyphTypeface><GlyphTypeface FontUri="C:\Windows\Fonts\segoeuib.ttf"/></GlyphRun.GlyphTypeface></GlyphRun></GlyphRunDrawing.GlyphRun></GlyphRunDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- NOTE: GlyphRun 在 XAML 里很难维护（需要字体 URI 和字形索引）。
+         推荐实际实现时把字母 tab 改为 FormattedText via DrawingContext，
+         或在 codebehind 的 helper 里根据 kind 生成。
+         
+         下方其它 13 个 DrawingImage 仅保留 page + fold + tab（不含字母），
+         由 ViewModel 在运行时叠加 TextBlock 字母层，这样更灵活。 -->
+
+    <!-- xls / X -->
+    <DrawingImage x:Key="FileIconXls">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+                <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtTabXls}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- ppt / P -->
+    <DrawingImage x:Key="FileIconPpt">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+                <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtTabPpt}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- pdf -->
+    <DrawingImage x:Key="FileIconPdf">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+                <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource FtTabPdf}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- img / video / music / code / zip / exe / txt / link / ttf — 结构相同 -->
+    <DrawingImage x:Key="FileIconImg">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabImg}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconVideo">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabVideo}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconMusic">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabMusic}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconCode">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabCode}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconZip">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabZip}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconExe">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabExe}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconTxt">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabTxt}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconLink">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabLink}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+    <DrawingImage x:Key="FileIconTtf">
+        <DrawingImage.Drawing><DrawingGroup><DrawingGroup.ClipGeometry><RectangleGeometry Rect="0,0,48,48"/></DrawingGroup.ClipGeometry>
+            <GeometryDrawing Brush="{StaticResource FtPageBrush}"><GeometryDrawing.Pen><Pen Brush="{StaticResource FtPageStroke}" Thickness="0.8"/></GeometryDrawing.Pen><GeometryDrawing.Geometry><PathGeometry Figures="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtFoldFill}"><GeometryDrawing.Geometry><PathGeometry Figures="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z"/></GeometryDrawing.Geometry></GeometryDrawing>
+            <GeometryDrawing Brush="{StaticResource FtTabTtf}"><GeometryDrawing.Geometry><RectangleGeometry Rect="8,28,28,12" RadiusX="2" RadiusY="2"/></GeometryDrawing.Geometry></GeometryDrawing>
+        </DrawingGroup></DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

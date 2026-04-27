@@ -1,0 +1,131 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="display:none">
+  <defs>
+
+    
+    <linearGradient id="ft-grad-folder" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E9C268"></stop>
+      <stop offset="100%" stop-color="#B27E2C"></stop>
+    </linearGradient>
+    <symbol id="ft-folder" viewBox="0 0 48 48">
+      <path d="M 4 14 Q 4 10 8 10 L 18 10 L 22 14 L 40 14 Q 44 14 44 18 L 44 36 Q 44 40 40 40 L 8 40 Q 4 40 4 36 Z" fill="url(#ft-grad-folder)"></path>
+      <path d="M 4 16 L 44 16" stroke="rgba(255,255,255,0.4)" stroke-width="1.2"></path>
+    </symbol>
+
+    
+    <linearGradient id="ft-grad-page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"></stop>
+      <stop offset="100%" stop-color="#E8ECF4"></stop>
+    </linearGradient>
+
+    
+    <linearGradient id="ft-grad-doc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4A85D8"></stop><stop offset="100%" stop-color="#2E5AB5"></stop></linearGradient>
+    <linearGradient id="ft-grad-xls" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3FB978"></stop><stop offset="100%" stop-color="#208B52"></stop></linearGradient>
+    <linearGradient id="ft-grad-ppt" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E3643A"></stop><stop offset="100%" stop-color="#B03E18"></stop></linearGradient>
+    <linearGradient id="ft-grad-pdf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E15340"></stop><stop offset="100%" stop-color="#B22419"></stop></linearGradient>
+    <linearGradient id="ft-grad-img" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C24DB8"></stop><stop offset="100%" stop-color="#8A248E"></stop></linearGradient>
+    <linearGradient id="ft-grad-video" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#D94A74"></stop><stop offset="100%" stop-color="#A0234A"></stop></linearGradient>
+    <linearGradient id="ft-grad-music" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8860CF"></stop><stop offset="100%" stop-color="#5A339B"></stop></linearGradient>
+    <linearGradient id="ft-grad-code" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2FA3B5"></stop><stop offset="100%" stop-color="#106E82"></stop></linearGradient>
+    <linearGradient id="ft-grad-zip" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#9BB543"></stop><stop offset="100%" stop-color="#6B8318"></stop></linearGradient>
+    <linearGradient id="ft-grad-exe" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5377C7"></stop><stop offset="100%" stop-color="#2D4FA0"></stop></linearGradient>
+    <linearGradient id="ft-grad-txt" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7F8B9F"></stop><stop offset="100%" stop-color="#4F5A6C"></stop></linearGradient>
+    <linearGradient id="ft-grad-link" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4090C8"></stop><stop offset="100%" stop-color="#1E6698"></stop></linearGradient>
+    <linearGradient id="ft-grad-ttf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3FAAB5"></stop><stop offset="100%" stop-color="#167480"></stop></linearGradient>
+
+    
+    
+
+    <symbol id="ft-doc" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-doc)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="Segoe UI, system-ui">W</text>
+    </symbol>
+
+    <symbol id="ft-xls" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-xls)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="Segoe UI, system-ui">X</text>
+    </symbol>
+
+    <symbol id="ft-ppt" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-ppt)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="Segoe UI, system-ui">P</text>
+    </symbol>
+
+    <symbol id="ft-pdf" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-pdf)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">PDF</text>
+    </symbol>
+
+    <symbol id="ft-img" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-img)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">IMG</text>
+    </symbol>
+
+    <symbol id="ft-video" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-video)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">MP4</text>
+    </symbol>
+
+    <symbol id="ft-music" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-music)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Segoe UI, system-ui">♪</text>
+    </symbol>
+
+    <symbol id="ft-code" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-code)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="8.5" font-weight="700" font-family="JetBrains Mono, monospace">&lt;&gt;</text>
+    </symbol>
+
+    <symbol id="ft-zip" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-zip)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">ZIP</text>
+    </symbol>
+
+    <symbol id="ft-exe" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-exe)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">EXE</text>
+    </symbol>
+
+    <symbol id="ft-txt" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-txt)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Segoe UI, system-ui">TXT</text>
+    </symbol>
+
+    <symbol id="ft-link" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-link)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="11" font-weight="700" font-family="Segoe UI, system-ui">↗</text>
+    </symbol>
+
+    <symbol id="ft-ttf" viewBox="0 0 48 48">
+      <path d="M 10 5 L 32 5 L 42 15 L 42 43 Q 42 45 40 45 L 10 45 Q 8 45 8 43 L 8 7 Q 8 5 10 5 Z" fill="url(#ft-grad-page)" stroke="rgba(40,50,70,0.18)" stroke-width="0.8"></path>
+      <path d="M 32 5 L 42 15 L 34 15 Q 32 15 32 13 Z" fill="rgba(40,50,70,0.12)"></path>
+      <rect x="8" y="28" width="28" height="12" rx="2" fill="url(#ft-grad-ttf)"></rect>
+      <text x="22" y="37" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="Segoe UI, system-ui" font-style="italic">Aa</text>
+    </symbol>
+
+  </defs>
+</svg>

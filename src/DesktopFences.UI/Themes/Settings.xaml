@@ -84,6 +84,136 @@
         <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
     </Style>
 
+    <!-- ══════════════════════════════════════════════════════
+         Segmented control (pill-row toggle, v2 .sw-fence-segmented)
+         ══════════════════════════════════════════════════════ -->
+    <Style x:Key="SwSegmentedContainerStyle" TargetType="Border">
+        <Setter Property="Background" Value="#40000000" />
+        <Setter Property="BorderBrush" Value="#0DFFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style x:Key="SwSegStyle" TargetType="ToggleButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Padding" Value="14,5" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="5"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"
+                                          HorizontalAlignment="Center"
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Count pill inside a segmented button -->
+    <Style x:Key="SwSegCountStyle" TargetType="Border">
+        <Setter Property="Background" Value="#1AFFFFFF" />
+        <Setter Property="CornerRadius" Value="9" />
+        <Setter Property="MinWidth" Value="20" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Padding" Value="6,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="7,0,0,0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════
+         Keyboard badge (kbd-big, used in Shortcuts pane)
+         ══════════════════════════════════════════════════════ -->
+    <Style x:Key="SwKbdBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="#0FFFFFFF" />
+        <Setter Property="BorderBrush" Value="#1AFFFFFF" />
+        <Setter Property="BorderThickness" Value="1,1,1,2" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="7,3" />
+        <Setter Property="MinWidth" Value="22" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+
+    <Style x:Key="SwKbdTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontFamily" Value="Consolas, 'Cascadia Mono', 'JetBrains Mono', monospace" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════
+         Stats tile (About pane)
+         ══════════════════════════════════════════════════════ -->
+    <Style x:Key="SwStatTileStyle" TargetType="Border">
+        <Setter Property="Background" Value="#08FFFFFF" />
+        <Setter Property="BorderBrush" Value="#0DFFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <Style x:Key="SwStatNumberStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+
+    <Style x:Key="SwStatLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════
+         Empty state (used in FencesManage closed list)
+         ══════════════════════════════════════════════════════ -->
+    <Style x:Key="SwEmptyContainerStyle" TargetType="Border">
+        <Setter Property="Background" Value="#15000000" />
+        <Setter Property="BorderBrush" Value="#14FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="20,40" />
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════
+         Mono / table label utility styles
+         ══════════════════════════════════════════════════════ -->
+    <Style x:Key="SwMonoStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Consolas, 'Cascadia Mono', 'JetBrains Mono', monospace" />
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <Style x:Key="SwTableHeadCellStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFaintBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- Sidebar nav ListBoxItem template: hover bg + active accent bar -->
     <Style x:Key="SwNavItemStyle" TargetType="ListBoxItem">
         <Setter Property="Padding" Value="0" />

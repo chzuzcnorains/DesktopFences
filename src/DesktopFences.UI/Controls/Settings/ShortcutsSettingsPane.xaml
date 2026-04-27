@@ -4,12 +4,11 @@
     <StackPanel>
         <StackPanel Margin="0,0,0,18">
             <TextBlock Text="快捷键" Style="{StaticResource SwPaneTitleStyle}" />
-            <TextBlock Text="已注册的全局与窗口快捷键一览。"
+            <TextBlock Text="DesktopFences 注册的全局热键与窗口快捷键。后续版本将开放重绑定。"
                        Style="{StaticResource SwPaneDescStyle}" />
         </StackPanel>
-        <Border Style="{StaticResource SwCardStyle}" Padding="16">
-            <TextBlock Text="(此页面将在批次 9 实现：分组列表展示已注册快捷键)"
-                       Foreground="{DynamicResource TextFaintBrush}" FontSize="12" />
-        </Border>
+
+        <!-- 3 groups; rows are built in code-behind to avoid 30 lines of repetitive XAML -->
+        <StackPanel x:Name="GroupsRoot" />
     </StackPanel>
 </UserControl>

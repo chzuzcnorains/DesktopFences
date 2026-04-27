@@ -74,6 +74,18 @@ public class AppSettings
     public bool CompatibilityMode { get; set; }
     public bool DebugLogging { get; set; }
 
+    /// <summary>
+    /// Delay (ms) between Win+D detection and z-order elevation. Default 300ms
+    /// matches Explorer's ShowDesktop animation; 0 = instant. Requires restart.
+    /// </summary>
+    public int WinDDetectionDelayMs { get; set; } = 300;
+
+    /// <summary>
+    /// Severity floor for diagnostic logging. One of: Error, Warn, Info, Debug, Trace.
+    /// Only consumed when DebugLogging is true.
+    /// </summary>
+    public string LogLevel { get; set; } = "Info";
+
     // Auto-organize
     /// <summary>
     /// Whether to automatically scan the desktop every 2 seconds and classify files.

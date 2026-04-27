@@ -1,0 +1,91 @@
+<!-- ══════════════════════════════════════════════════════════════
+     DesktopFences.UI / Themes / AppLogo.xaml
+     
+     The DesktopFences main application logo as a vector DrawingImage.
+     Size-independent — use wherever you previously referenced app.ico.
+     
+     USAGE:
+     
+         <Image Source="{StaticResource AppLogoImage}" Width="32" Height="32"/>
+     
+     Also exposes individual brushes so you can re-skin with a different
+     accent hue without re-authoring the geometry.
+     ══════════════════════════════════════════════════════════════ -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Accent hue (blue 248°) — override these two to re-color the logo -->
+    <Color x:Key="AppLogoTopColor">#7AA7E6</Color>     <!-- oklch(68% 0.16 248) -->
+    <Color x:Key="AppLogoBottomColor">#3D58B1</Color>  <!-- oklch(42% 0.14 266) -->
+
+    <LinearGradientBrush x:Key="AppLogoBgBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource AppLogoTopColor}" Offset="0"/>
+        <GradientStop Color="{StaticResource AppLogoBottomColor}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="AppLogoHighlightBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#59FFFFFF" Offset="0"/>
+        <GradientStop Color="#00FFFFFF" Offset="0.6"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="AppLogoEdgeBrush" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="AppLogoTileStrongBrush" Color="#F2FFFFFF"/>
+    <SolidColorBrush x:Key="AppLogoTileSoftBrush"   Color="#8CFFFFFF"/>
+
+    <DrawingImage x:Key="AppLogoImage">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry>
+                    <RectangleGeometry Rect="0,0,48,48"/>
+                </DrawingGroup.ClipGeometry>
+
+                <!-- rounded square background -->
+                <GeometryDrawing Brush="{StaticResource AppLogoBgBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="1,1,46,46" RadiusX="10.5" RadiusY="10.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+
+                <!-- diagonal highlight -->
+                <GeometryDrawing Brush="{StaticResource AppLogoHighlightBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="1,1,46,46" RadiusX="10.5" RadiusY="10.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+
+                <!-- four fence tiles (alternating 95% / 55% white) -->
+                <GeometryDrawing Brush="{StaticResource AppLogoTileStrongBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="8.5,8.5,14,14" RadiusX="2.5" RadiusY="2.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource AppLogoTileSoftBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="25.5,8.5,14,14" RadiusX="2.5" RadiusY="2.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource AppLogoTileSoftBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="8.5,25.5,14,14" RadiusX="2.5" RadiusY="2.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource AppLogoTileStrongBrush}">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="25.5,25.5,14,14" RadiusX="2.5" RadiusY="2.5"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+
+                <!-- 1px inner edge highlight -->
+                <GeometryDrawing>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="{StaticResource AppLogoEdgeBrush}" Thickness="1"/>
+                    </GeometryDrawing.Pen>
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="1.5,1.5,45,45" RadiusX="10" RadiusY="10"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

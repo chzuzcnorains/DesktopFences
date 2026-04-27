@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DesktopFences — 图标系统</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; font-family: "Noto Sans SC", "Segoe UI", system-ui, sans-serif; color: #e8ecf4; }
+  body {
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, oklch(30% 0.09 248) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 85% 90%, oklch(28% 0.1 280) 0%, transparent 55%),
+      linear-gradient(160deg, oklch(16% 0.06 250) 0%, oklch(10% 0.04 240) 100%);
+    min-height: 100vh;
+  }
+  .page { max-width: 1480px; margin: 0 auto; padding: 56px 40px 80px; }
+  .hero { margin-bottom: 36px; }
+  .hero h1 { margin: 0 0 8px; font-size: 30px; font-weight: 700; letter-spacing: -0.4px; }
+  .hero p { margin: 0; color: #aeb8cc; font-size: 13.5px; line-height: 1.6; max-width: 720px; }
+  .hero .muted { color: #7b8296; font-family: "JetBrains Mono", monospace; font-size: 11px; }
+
+  .sys-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 36px; }
+  .sys {
+    background: rgba(18, 24, 42, 0.55);
+    backdrop-filter: blur(28px) saturate(1.3);
+    -webkit-backdrop-filter: blur(28px) saturate(1.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex; flex-direction: column;
+    gap: 20px;
+  }
+  .sys h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .sys .tag { display: inline-block; font-size: 10.5px; letter-spacing: 0.6px; text-transform: uppercase; color: #7b8296; font-family: "JetBrains Mono", monospace; margin-bottom: 4px; }
+  .sys .desc { color: #aeb8cc; font-size: 12px; line-height: 1.55; }
+
+  .block { border-top: 1px solid rgba(255,255,255,0.06); padding-top: 18px; }
+  .block:first-of-type { border-top: 0; padding-top: 0; }
+  .block h3 { margin: 0 0 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: #aeb8cc; }
+
+  /* app logo display */
+  .logo-row { display: flex; align-items: flex-end; gap: 20px; padding: 12px 0 6px; }
+  .logo-row .spec { font-size: 10.5px; color: #7b8296; font-family: "JetBrains Mono", monospace; text-align: center; margin-top: 6px; }
+  .logo-col { display: flex; flex-direction: column; align-items: center; }
+
+  /* file grid */
+  .fgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px 4px; }
+  .fitem { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 2px; border-radius: 6px; }
+  .fitem:hover { background: rgba(255,255,255,0.04); }
+  .fitem .lbl { font-size: 10px; color: #aeb8cc; text-align: center; line-height: 1.2; max-width: 64px; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* action grid */
+  .agrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px 4px; }
+  .aitem { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .aitem .lbl { font-size: 9.5px; color: #7b8296; font-family: "JetBrains Mono", monospace; letter-spacing: 0.3px; }
+
+  /* scene — shows icons in context as a mock fence */
+  .scene {
+    margin-top: 20px;
+    background:
+      linear-gradient(135deg, oklch(35% 0.08 220), oklch(40% 0.09 260));
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .scene-title { font-size: 10.5px; color: rgba(255,255,255,0.6); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 10px; }
+  .mini-fence {
+    background: rgba(16, 22, 38, 0.65);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .mini-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 11.5px;
+    color: #e8ecf4;
+  }
+  .mini-bar .title { font-weight: 600; }
+  .mini-bar .acts { margin-left: auto; display: flex; gap: 2px; }
+  .mini-bar .acts > * { opacity: 0.75; }
+  .mini-bar .acts > *:hover { opacity: 1; }
+  .mini-body { padding: 10px 8px 12px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 2px; }
+  .mini-body .fitem { padding: 4px 2px; }
+  .mini-body .fitem .lbl { font-size: 9.5px; color: #e8ecf4; }
+
+  /* style-switch tabs on the sample scene */
+  .footer-note { margin-top: 48px; color: #7b8296; font-size: 11.5px; line-height: 1.7; font-family: "JetBrains Mono", monospace; }
+  .footer-note b { color: #aeb8cc; font-weight: 500; }
+
+  /* control for changing hue */
+  .controls {
+    margin-top: 24px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+  }
+  .controls label { color: #aeb8cc; font-size: 12px; margin-right: 4px; }
+  .swatches { display: flex; gap: 8px; }
+  .sw { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+  .sw.active { border-color: white; box-shadow: 0 0 0 1.5px rgba(0,0,0,0.4); }
+  .controls .val { color: #e8ecf4; font-family: "JetBrains Mono", monospace; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="hero">
+    <div class="muted">DesktopFences · Phase 9b · Icon System</div>
+    <h1>图标系统设计方案</h1>
+    <p>三套并行的图标视觉语言，每一套都覆盖：<b style="color:#e8ecf4">应用主图标</b>（多尺寸）、<b style="color:#e8ecf4">文件类型图标</b>（14 种）、<b style="color:#e8ecf4">UI 操作图标</b>（15 种）。整体继承项目现有的 Acrylic + oklch 248° 蓝色基调，可通过下方调色板预览不同主题色。</p>
+  </div>
+
+  <div class="controls">
+    <label>主题色 Hue</label>
+    <div class="swatches" id="hueSwatches"></div>
+    <span style="margin-left:auto"></span>
+    <label>当前值</label><span class="val" id="hueVal">248°</span>
+  </div>
+
+  <div id="root"></div>
+
+  <div class="footer-note">
+    <b>// 落地建议</b><br>
+    · 方案 A「Fluent Acrylic」最贴合 Windows 11 Fluent Design，适合作为产品最终出厂方案<br>
+    · 方案 B「Tile」最醒目、品牌识别度最强，可考虑用于任务栏/托盘与宣传物料<br>
+    · 方案 C「Glass Outline」最克制，适合作为设置窗口、右键菜单内的功能图标<br>
+    · 实际落地时可混合：主图标用 A/B 任一，内部功能图标统一用 C
+  </div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel">
+
+const STYLES = [
+  { id: 'fluent', name: 'A · Fluent Acrylic', tag: 'Windows 11 · 默认', desc: '圆角方形承载四宫格围栏意象，柔和渐变与白色高光。适合最终发布版的应用主图标、任务栏。' },
+  { id: 'tile',   name: 'B · Tile',           tag: '品牌强 · 醒目',  desc: '四色分块瓷砖，致敬开始菜单的 4 宫格节奏。颜色饱和度高，识别性强，可用于宣传与商店。' },
+  { id: 'glass',  name: 'C · Glass Outline',  tag: '线性 · 克制',     desc: '单色轮廓 + 半透明玻璃底。内部设置页、右键菜单、工具条图标的理想选择。' },
+];
+
+const FILE_KINDS = ['folder', 'doc', 'xls', 'ppt', 'pdf', 'img', 'video', 'music', 'code', 'zip', 'exe', 'txt', 'link', 'ttf'];
+const ACTIONS = [
+  ['add','新建'], ['settings','设置'], ['search','搜索'], ['pin','置顶'],
+  ['hide','隐藏'], ['rollup','折叠'], ['peek','Peek'], ['lock','锁定'],
+  ['merge','合并'], ['split','拆分'], ['trash','删除'], ['rule','规则'],
+  ['portal','Portal'], ['theme','主题'],
+];
+
+const HUE_OPTS = [248, 280, 195, 150, 75, 25];
+
+function StyleCol({ s, hue }) {
+  return (
+    <div className="sys">
+      <div>
+        <span className="tag">{s.tag}</span>
+        <h2>{s.name}</h2>
+        <div className="desc" style={{ marginTop: 6 }}>{s.desc}</div>
+      </div>
+
+      {/* App logo */}
+      <div className="block">
+        <h3>应用主图标 · App Logo</h3>
+        <div className="logo-row">
+          {[128, 64, 40, 24, 16].map(sz => (
+            <div className="logo-col" key={sz}>
+              <AppIcon style={s.id} size={sz} hue={hue} />
+              <div className="spec">{sz}px</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* File types */}
+      <div className="block">
+        <h3>文件类型 · File Kinds</h3>
+        <div className="fgrid">
+          {FILE_KINDS.map(k => (
+            <div className="fitem" key={k}>
+              <FileIcon kind={k} style={s.id} size={44} />
+              <div className="lbl">{kindName[k]}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="block">
+        <h3>操作图标 · UI Actions</h3>
+        <div className="agrid">
+          {ACTIONS.map(([n, zh]) => (
+            <div className="aitem" key={n}>
+              <ActionIcon name={n} style={s.id} size={24} />
+              <div className="lbl">{zh}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scene — mock fence */}
+      <div className="scene">
+        <div className="scene-title">在 Fence 中预览</div>
+        <div className="mini-fence">
+          <div className="mini-bar">
+            <AppIcon style={s.id} size={16} hue={hue} />
+            <span className="title">项目资料</span>
+            <span className="acts">
+              <ActionIcon name="search" style="fluent" size={14} color="#aeb8cc" />
+              <ActionIcon name="rollup" style="fluent" size={14} color="#aeb8cc" />
+              <ActionIcon name="settings" style="fluent" size={14} color="#aeb8cc" />
+            </span>
+          </div>
+          <div className="mini-body">
+            {['folder','doc','pdf','img','code'].map(k => (
+              <div className="fitem" key={k}>
+                <FileIcon kind={k} style={s.id} size={34} />
+                <div className="lbl">{kindName[k]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [hue, setHue] = React.useState(248);
+  React.useEffect(() => {
+    document.getElementById('hueVal').textContent = hue + '°';
+  }, [hue]);
+  React.useEffect(() => {
+    const host = document.getElementById('hueSwatches');
+    host.innerHTML = '';
+    HUE_OPTS.forEach(h => {
+      const d = document.createElement('div');
+      d.className = 'sw' + (h === hue ? ' active' : '');
+      d.style.background = `oklch(62% 0.16 ${h})`;
+      d.onclick = () => setHue(h);
+      host.appendChild(d);
+    });
+  }, [hue]);
+  return (
+    <div className="sys-grid">
+      {STYLES.map(s => <StyleCol key={s.id} s={s} hue={hue} />)}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>

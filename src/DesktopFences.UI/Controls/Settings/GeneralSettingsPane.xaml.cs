@@ -39,8 +39,6 @@ public partial class GeneralSettingsPane : UserControl
         ChkQuickHide.IsChecked = settings.QuickHideEnabled;
         ChkStartWithWindows.IsChecked = settings.StartWithWindows;
         ChkStartMinimized.IsChecked = settings.StartMinimized;
-        ChkCompatibilityMode.IsChecked = settings.CompatibilityMode;
-        ChkDebugLogging.IsChecked = settings.DebugLogging;
 
         CboTabStyle.SelectedItem = null;
         foreach (TabStyleOption opt in CboTabStyle.Items)
@@ -69,8 +67,6 @@ public partial class GeneralSettingsPane : UserControl
         settings.QuickHideEnabled = ChkQuickHide.IsChecked == true;
         settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;
         settings.StartMinimized = ChkStartMinimized.IsChecked == true;
-        settings.CompatibilityMode = ChkCompatibilityMode.IsChecked == true;
-        settings.DebugLogging = ChkDebugLogging.IsChecked == true;
 
         if (CboTabStyle.SelectedItem is TabStyleOption tabOpt)
             settings.TabStyle = tabOpt.Style;

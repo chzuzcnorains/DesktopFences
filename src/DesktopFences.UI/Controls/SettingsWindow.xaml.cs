@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using DesktopFences.Core.Models;
+using DesktopFences.UI.Controls.Settings;
 
 namespace DesktopFences.UI.Controls;
 
@@ -9,26 +10,68 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
 
-    /// <summary>
-    /// Fired when settings are saved. Provides the updated settings.
-    /// </summary>
+    /// <summary>Fired when settings are saved. Provides the updated settings.</summary>
     public event Action<AppSettings>? SettingsSaved;
 
-    /// <summary>
-    /// Fired when rules are saved. Provides the updated rules list.
-    /// </summary>
+    /// <summary>Fired when rules are saved. Provides the updated rules list.</summary>
     public event Action<List<ClassificationRule>>? RulesSaved;
 
-    public SettingsWindow(AppSettings settings, List<ClassificationRule> rules, List<FenceDefinition> fences)
+    /// <summary>Fence-management actions bubbled from FencesManageSettingsPane.</summary>
+    public event Action? NewFenceRequested;
+    public event Action? SaveSnapshotRequested;
+    public event Action? ExportLayoutRequested;
+    public event Action? ImportLayoutRequested;
+    public event Action<Guid>? RestoreClosedFenceRequested;
+
+    /// <summary>Danger-zone actions bubbled from AdvancedSettingsPane.</summary>
+    public event Action? ResetLayoutRequested;
+    public event Action? ClearRulesRequested;
+    public event Action? RestoreDefaultsRequested;
+
+    public SettingsWindow(AppSettings settings,
+                          List<ClassificationRule> rules,
+                          List<FenceDefinition> fences,
+                          IEnumerable<FencesManageSettingsPane.ClosedFenceRecord>? closedFences = null,
+                          int managedFileCount = 0,
+                          TimeSpan? uptime = null)
     {
         InitializeComponent();
         _settings = settings;
 
         PaneGeneral.Load(_settings);
+        PaneAppearance.Load(_settings);
+        PaneAdvanced.Load(_settings);
         PaneRules.Initialize(rules, fences);
+        PaneFences.Initialize(fences, closedFences ?? []);
+        PaneAbout.Initialize(
+            activeFenceCount: CountActiveGroups(fences),
+            managedFileCount: managedFileCount,
+            ruleCount: rules.Count,
+            uptime: uptime ?? TimeSpan.Zero);
 
-        // Default selection: 常规
+        WireSubpaneEvents();
+
         NavList.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// Counts distinct fence groups (a tab group counts as 1 even if it has multiple fences),
+    /// matching what the FencesManage pane and the about-tab "活动 Fence" stat report.
+    /// </summary>
+    private static int CountActiveGroups(IEnumerable<FenceDefinition> fences) =>
+        fences.Select(f => f.TabGroupId ?? f.Id).Distinct().Count();
+
+    private void WireSubpaneEvents()
+    {
+        PaneFences.NewFenceRequested            += () => NewFenceRequested?.Invoke();
+        PaneFences.SaveSnapshotRequested        += () => SaveSnapshotRequested?.Invoke();
+        PaneFences.ExportLayoutRequested        += () => ExportLayoutRequested?.Invoke();
+        PaneFences.ImportLayoutRequested        += () => ImportLayoutRequested?.Invoke();
+        PaneFences.RestoreClosedFenceRequested  += id => RestoreClosedFenceRequested?.Invoke(id);
+
+        PaneAdvanced.ResetLayoutRequested       += () => ResetLayoutRequested?.Invoke();
+        PaneAdvanced.ClearRulesRequested        += () => ClearRulesRequested?.Invoke();
+        PaneAdvanced.RestoreDefaultsRequested   += () => RestoreDefaultsRequested?.Invoke();
     }
 
     // ── Title Bar ─────────────────────────────────────────────
@@ -45,14 +88,9 @@ public partial class SettingsWindow : Window
     }
 
     private void BtnMinimize_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-    }
+        => WindowState = WindowState.Minimized;
 
-    private void BtnMaximize_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleMaximize();
-    }
+    private void BtnMaximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
 
     private void ToggleMaximize()
     {
@@ -65,11 +103,9 @@ public partial class SettingsWindow : Window
 
     /// <summary>
     /// Backwards-compatible tab selector. Legacy callers used 0 = settings, 1 = rules.
-    /// New layout maps these to the corresponding sidebar items.
     /// </summary>
     public void SelectTab(int legacyIndex)
     {
-        // 0 → general, 1 → rules; everything else falls back to general.
         var navIndex = legacyIndex switch
         {
             0 => 0, // general
@@ -111,13 +147,12 @@ public partial class SettingsWindow : Window
     private void BtnSave_Click(object sender, RoutedEventArgs e)
     {
         PaneGeneral.Save(_settings);
+        PaneAppearance.Save(_settings);
+        PaneAdvanced.Save(_settings);
         SettingsSaved?.Invoke(_settings);
         RulesSaved?.Invoke(PaneRules.GetRules());
         Close();
     }
 
-    private void BtnCancel_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
+    private void BtnCancel_Click(object sender, RoutedEventArgs e) => Close();
 }

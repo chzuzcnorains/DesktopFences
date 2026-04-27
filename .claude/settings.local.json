@@ -45,7 +45,22 @@
       "Bash(dotnet build DesktopFences.sln)",
       "Bash(taskkill //F //PID 16720)",
       "Bash(taskkill //F //IM DesktopFences.App.exe)",
-      "Bash(dotnet new gitignore)"
+      "Bash(dotnet new gitignore)",
+      "Bash(powershell.exe -Command \"Start-Process ''shell:AppsFolder\\\\Claude_pzs8sxrjxfjjc!Claude''\")",
+      "Bash(powershell.exe -Command \"Get-StartApps | Where-Object { \\\\$_.Name -like '*Claude*' }\")",
+      "WebFetch(domain:api.anthropic.com)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(cp handoff/xaml/AppLogo.xaml src/DesktopFences.UI/Themes/AppLogo.xaml)",
+      "Bash(cp handoff/xaml/Icons.xaml src/DesktopFences.UI/Themes/Icons.xaml)",
+      "PowerShell(pwsh -NoProfile -ExecutionPolicy Bypass -File \"D:\\\\Workspace_VSCode\\\\DesktopFences\\\\handoff\\\\icons\\\\build-ico.ps1\")",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(dotnet build *)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__filesystem__directory_tree",
+      "mcp__filesystem__search_files",
+      "mcp__filesystem__read_text_file"
     ]
   }
 }

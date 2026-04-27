@@ -114,14 +114,5 @@
 
         <CheckBox x:Name="ChkStartMinimized" Content="启动后最小化到托盘"
                   Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-        <!-- 高级 -->
-        <TextBlock Text="高级" Style="{StaticResource SwSectionHeaderStyle}" Margin="0,16,0,10" />
-
-        <CheckBox x:Name="ChkCompatibilityMode" Content="兼容模式（禁用窗口层级管理）"
-                  Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-        <CheckBox x:Name="ChkDebugLogging" Content="启用调试日志"
-                  Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
     </StackPanel>
 </UserControl>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<title>DesktopFences · 图标预览</title>
+<style>
+  body { margin: 0; padding: 48px; background: #0f1115; color: #e8eaed;
+         font-family: -apple-system, "Segoe UI", sans-serif; }
+  h1 { margin: 0 0 8px; font-size: 24px; }
+  h2 { margin: 40px 0 16px; font-size: 12px; letter-spacing: 0.12em;
+       text-transform: uppercase; color: #9ba3b1; font-weight: 600; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  .subtitle { color: #9ba3b1; margin-bottom: 24px; }
+  .grid { display: grid; gap: 12px; }
+  .actions { grid-template-columns: repeat(6, 1fr); }
+  .files { grid-template-columns: repeat(7, 1fr); }
+  .sizes { display: flex; gap: 32px; align-items: flex-end; padding: 24px;
+           background: #181b22; border-radius: 12px; border: 1px solid #2a2f3a;
+           flex-wrap: wrap; }
+  .cell { background: #181b22; border: 1px solid #2a2f3a; border-radius: 8px;
+          padding: 16px 8px; display: flex; flex-direction: column;
+          align-items: center; gap: 8px; }
+  .cell .lbl { font-size: 11px; color: #9ba3b1; font-family: "JetBrains Mono", monospace; }
+  .cell svg.action-ic { color: #cfd6e6; stroke: currentColor; }
+  .file-ic { position: relative; width: 48px; height: 48px; }
+  .file-ic .tag { position: absolute; bottom: 7px; left: 0; right: 0;
+                  text-align: center; color: white; font-weight: 700;
+                  font-family: "Segoe UI", sans-serif; pointer-events: none;
+                  line-height: 1; }
+  .size-app { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .size-app .lbl { font-size: 11px; color: #9ba3b1; }
+  .warning { background: rgba(227,100,58,0.1); border: 1px solid rgba(227,100,58,0.3);
+             padding: 12px 16px; border-radius: 8px; font-size: 13px;
+             color: #e3a078; margin-top: 16px; display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>DesktopFences · 图标系统预览</h1>
+  <div class="subtitle">所有交付图标的可视化。WPF 落地后效果与此一致。</div>
+  <div class="warning" id="warning">
+    ⚠️ 若图标未显示，请从 Web 服务器打开本文件（不要直接用 file:// 打开，浏览器会拦截跨文件加载）。
+    可以在 handoff/ 目录执行 <code>python -m http.server</code> 后访问 <code>http://localhost:8000/preview.html</code>。
+  </div>
+
+  <h2>主 Logo · 多尺寸</h2>
+  <div class="sizes" id="sizes"></div>
+
+  <h2>操作图标 · 20 个（24×24，stroke=1.8）</h2>
+  <div class="grid actions" id="actions"></div>
+
+  <h2>文件类型图标 · 14 个（48×48）</h2>
+  <div class="grid files" id="files"></div>
+
+</div>
+
+<script>
+const APP_SIZES = [16, 24, 32, 48, 64, 96, 128, 192];
+const ACTIONS = [
+  ['search','搜索'],['settings','设置'],['pin','置顶'],['hide','隐藏'],
+  ['rollup','折叠'],['peek','Peek'],['add','新建'],['lock','锁定'],
+  ['merge','合并'],['split','拆分'],['trash','删除'],['rule','规则'],
+  ['portal','Portal'],['theme','主题'],['close','关闭'],['min','最小化'],
+  ['max','最大化'],['keyboard','快捷键'],['grid','布局'],['info','关于']
+];
+const FILES = [
+  ['folder',''],['doc','W'],['xls','X'],['ppt','P'],
+  ['pdf','PDF'],['img','IMG'],['video','MP4'],
+  ['music','♪'],['code','<>'],['zip','ZIP'],
+  ['exe','EXE'],['txt','TXT'],['link','↗'],['ttf','Aa']
+];
+
+// Inline-embed SVGs so this works from file:// too.
+async function loadText(url) {
+  try { const r = await fetch(url); if (!r.ok) throw 0; return await r.text(); }
+  catch { document.getElementById('warning').style.display = 'block'; return null; }
+}
+
+(async () => {
+  const [appSvg, actionSprite, fileSprite] = await Promise.all([
+    loadText('icons/app-logo.svg'),
+    loadText('icons/actions.sprite.svg'),
+    loadText('icons/file-types.sprite.svg'),
+  ]);
+
+  // Inject sprite defs into document so <use href="#..."> works
+  if (actionSprite) document.body.insertAdjacentHTML('afterbegin', actionSprite);
+  if (fileSprite)   document.body.insertAdjacentHTML('afterbegin', fileSprite);
+
+  // App logo — render at each size by inlining the SVG and overriding width/height
+  const sizesEl = document.getElementById('sizes');
+  APP_SIZES.forEach(size => {
+    const wrap = document.createElement('div');
+    wrap.className = 'size-app';
+    if (appSvg) {
+      // Strip width/height from source, apply our own
+      const clean = appSvg.replace(/<svg ([^>]*?)>/,
+        `<svg $1 width="${size}" height="${size}" style="width:${size}px;height:${size}px">`)
+        .replace(/width="\d+"/, '').replace(/height="\d+"/, '');
+      wrap.innerHTML = `<div>${clean}</div><div class="lbl">${size}</div>`;
+      // Re-set sizes on the first (now only) svg child
+      const svg = wrap.querySelector('svg');
+      svg.setAttribute('width', size);
+      svg.setAttribute('height', size);
+    } else {
+      wrap.innerHTML = `<div style="width:${size}px;height:${size}px;background:#333"></div><div class="lbl">${size}</div>`;
+    }
+    sizesEl.appendChild(wrap);
+  });
+
+  // Action icons
+  const actionsEl = document.getElementById('actions');
+  ACTIONS.forEach(([name, label]) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.innerHTML = `
+      <svg width="28" height="28" viewBox="0 0 24 24" class="action-ic">
+        <use href="#ic-${name}"/>
+      </svg>
+      <div class="lbl">${label}</div>`;
+    actionsEl.appendChild(cell);
+  });
+
+  // File icons
+  const filesEl = document.getElementById('files');
+  FILES.forEach(([kind, label]) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const fontSize = label.length > 2 ? 7 : (label.length === 0 ? 0 : 8.5);
+    cell.innerHTML = `
+      <div class="file-ic">
+        <svg width="48" height="48" viewBox="0 0 48 48"><use href="#ft-${kind}"/></svg>
+        ${label ? `<div class="tag" style="font-size:${fontSize}px">${label}</div>` : ''}
+      </div>
+      <div class="lbl">${kind}</div>`;
+    filesEl.appendChild(cell);
+  });
+})();
+</script>
+</body>
+</html>
