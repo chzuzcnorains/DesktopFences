@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace DesktopFences.Core.Models;
 
 /// <summary>
@@ -26,6 +28,38 @@ public class AppSettings
     /// Valid range 28–64.
     /// </summary>
     public int IconSize { get; set; } = 44;
+
+    /// <summary>
+    /// Accent color (sRGB hex). Drives DynamicResource AccentColor — affects
+    /// selected items, focus glow, primary buttons. v2 prototype uses
+    /// 6 swatches: blue (#7AA7E6), indigo, teal, green, amber, coral.
+    /// </summary>
+    public string AccentColor { get; set; } = "#7AA7E6";
+
+    /// <summary>
+    /// Fence background hue 0-360. Combined with FenceOpacity it produces
+    /// the per-fence translucent body color.
+    /// </summary>
+    public int FenceBgHue { get; set; } = 220;
+
+    /// <summary>
+    /// Fence body opacity (0.20 – 0.90). Default 0.85 means semi-transparent
+    /// glass-like background.
+    /// </summary>
+    public double FenceOpacity { get; set; } = 0.85;
+
+    /// <summary>
+    /// Fence shadow blur radius (0 – 60 px). Drives the soft drop shadow under
+    /// each fence panel; 0 disables it. WPF's DropShadowEffect approximates
+    /// the CSS backdrop-filter blur from the v2 prototype.
+    /// </summary>
+    public int FenceBlurRadius { get; set; } = 26;
+
+    /// <summary>
+    /// FIFO of recently-closed fences (FenceDefinition serialized as JSON).
+    /// Up to 20 entries. Drives the "Recently closed" panel + restore menu.
+    /// </summary>
+    public List<string> RecentClosedFences { get; set; } = new();
 
     // Behavior
     public int SnapThreshold { get; set; } = 10;

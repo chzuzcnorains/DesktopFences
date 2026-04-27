@@ -16,12 +16,13 @@
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
+                            CornerRadius="6,6,0,0"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <Grid>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
-                            <!-- Bottom indicator line -->
+                            <!-- Bottom indicator line (transparent in idle) -->
                             <Border x:Name="Indicator"
                                     Height="2"
                                     VerticalAlignment="Bottom"
@@ -32,7 +33,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -40,13 +41,14 @@
         </Setter>
     </Style>
 
-    <!-- Flat active: with blue indicator -->
+    <!-- Flat active: subtle tinted bg + accent bottom indicator (v2 原型). -->
     <Style x:Key="FlatTabButtonActiveStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource FlatTabButtonStyle}">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
-                            Background="{TemplateBinding Background}"
+                            Background="{DynamicResource TitleBarActiveBrush}"
+                            CornerRadius="6,6,0,0"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <Grid>
@@ -54,7 +56,7 @@
                                               VerticalAlignment="Center" />
                             <Border Height="2"
                                     VerticalAlignment="Bottom"
-                                    Background="#6688CC"
+                                    Background="{DynamicResource AccentBrush}"
                                     CornerRadius="1"
                                     Margin="4,0,4,-1" />
                         </Grid>
@@ -65,14 +67,14 @@
     </Style>
 
     <!-- ══════════════════════════════════════════════════════
-         Segmented Tab Style — separator lines between tabs
+         Segmented Tab Style — pill 形 (圆角 14)，active 用 accent 渐变填色
          ══════════════════════════════════════════════════════ -->
     <Style x:Key="SegmentedTabButtonStyle" TargetType="{x:Type Button}">
-        <Setter Property="Padding" Value="10,0,10,0" />
-        <Setter Property="Height" Value="24" />
-        <Setter Property="BorderThickness" Value="0,0,1,0" />
-        <Setter Property="BorderBrush" Value="#33FFFFFF" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="12,0,12,0" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="Margin" Value="2,0,2,0" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontSize" Value="12.5" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Template">
@@ -80,8 +82,7 @@
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="14"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -89,7 +90,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -102,13 +103,18 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
-                            Background="#336688CC"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="14"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="{DynamicResource AccentColor}" Offset="0"/>
+                                <GradientStop Color="{DynamicResource AccentStrongColor}" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
                         <ContentPresenter HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
+                                          VerticalAlignment="Center"
+                                          TextElement.Foreground="White"/>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
@@ -116,22 +122,21 @@
     </Style>
 
     <!-- ══════════════════════════════════════════════════════
-         Rounded Tab Style — capsule shape with fill on active
+         Rounded Tab Style — 顶部圆角 10,10,0,0；active 加 accent 底线 + 浅 tint
          ══════════════════════════════════════════════════════ -->
     <Style x:Key="RoundedTabButtonStyle" TargetType="{x:Type Button}">
         <Setter Property="Padding" Value="10,0,10,0" />
-        <Setter Property="Height" Value="22" />
-        <Setter Property="Margin" Value="2,2,0,2" />
+        <Setter Property="Height" Value="26" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Bottom" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="12"
+                            CornerRadius="10,10,0,0"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="Center"
@@ -139,7 +144,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -152,12 +157,19 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
                     <Border x:Name="Bd"
-                            Background="#446688CC"
-                            CornerRadius="12"
+                            Background="#1FFFFFFF"
+                            CornerRadius="10,10,0,0"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="Center"
-                                          VerticalAlignment="Center" />
+                        <Grid>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                            <Border Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="1"
+                                    Margin="6,0,6,-1" />
+                        </Grid>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
