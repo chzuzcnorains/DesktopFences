@@ -47,6 +47,7 @@ public partial class SearchWindow : Window
     {
         _allItems = items;
         ResultsList.ItemsSource = items;
+        UpdateEmptyState();
     }
 
     private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
@@ -63,6 +64,14 @@ public partial class SearchWindow : Window
                              || r.FenceName.Contains(query, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
+        UpdateEmptyState();
+    }
+
+    private void UpdateEmptyState()
+    {
+        EmptyState.Visibility = ResultsList.Items.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)

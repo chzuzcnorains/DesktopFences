@@ -465,11 +465,11 @@
          ══════════════════════════════════════════════════════ -->
 
     <Style x:Key="DarkContextMenuStyle" TargetType="{x:Type ContextMenu}">
-        <Setter Property="Background" Value="#EE2A2A3E" />
-        <Setter Property="Foreground" Value="#EEEEEE" />
-        <Setter Property="BorderBrush" Value="#55888888" />
+        <Setter Property="Background" Value="#EB1C2030" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="#1AFFFFFF" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="2" />
+        <Setter Property="Padding" Value="4" />
         <Setter Property="HasDropShadow" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
@@ -478,11 +478,11 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="6"
+                            CornerRadius="8"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
                         <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" Opacity="0.4" ShadowDepth="4" Color="Black" />
+                            <DropShadowEffect BlurRadius="40" Opacity="0.5" ShadowDepth="8" Color="Black" />
                         </Border.Effect>
                         <StackPanel IsItemsHost="True"
                                     KeyboardNavigation.DirectionalNavigation="Cycle" />
@@ -493,9 +493,9 @@
     </Style>
 
     <Style x:Key="DarkMenuItemStyle" TargetType="{x:Type MenuItem}">
-        <Setter Property="Foreground" Value="#EEEEEE" />
-        <Setter Property="Padding" Value="10,6" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="FontSize" Value="12.5" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">
@@ -542,6 +542,61 @@
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="#22446688" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Danger variant: destructive actions (close fence, delete file…).
+         Red foreground + tinted hover background. -->
+    <Style x:Key="DarkDangerMenuItemStyle" TargetType="{x:Type MenuItem}" BasedOn="{StaticResource DarkMenuItemStyle}">
+        <Setter Property="Foreground" Value="#E8896F" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type MenuItem}">
+                    <Border x:Name="Bd"
+                            Background="Transparent"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}"
+                            Margin="2,1"
+                            SnapsToDevicePixels="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Shortcut" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter x:Name="Icon"
+                                              Grid.Column="0"
+                                              ContentSource="Icon"
+                                              Width="16" Height="16"
+                                              Margin="0,0,6,0"
+                                              VerticalAlignment="Center" />
+                            <ContentPresenter Grid.Column="1"
+                                              ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            <TextBlock x:Name="Shortcut"
+                                       Grid.Column="2"
+                                       Text="{TemplateBinding InputGestureText}"
+                                       Foreground="#88AAAAAA"
+                                       Margin="20,0,0,0"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="Icon" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#804E1F10" />
+                            <Setter Property="Foreground" Value="White" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="#55AAAAAA" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

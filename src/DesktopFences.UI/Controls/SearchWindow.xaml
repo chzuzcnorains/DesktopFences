@@ -8,16 +8,16 @@
         ShowInTaskbar="False"
         ResizeMode="NoResize"
         Topmost="True"
-        Width="500" Height="400"
+        Width="520" Height="420"
         WindowStartupLocation="CenterScreen"
         KeyDown="Window_KeyDown">
-    <Border Background="#EE1E1E2E"
+    <Border Background="#EB161A2A"
             CornerRadius="10"
-            BorderBrush="#55888888"
+            BorderBrush="#1AFFFFFF"
             BorderThickness="1"
             Margin="8">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.5" />
+            <DropShadowEffect BlurRadius="40" ShadowDepth="12" Opacity="0.5" />
         </Border.Effect>
         <Grid Margin="16">
             <Grid.RowDefinitions>
@@ -25,57 +25,110 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Search box -->
-            <Border Background="#33FFFFFF" CornerRadius="6" Padding="8,6">
-                <TextBox x:Name="SearchBox"
-                         Background="Transparent"
-                         Foreground="#EEEEEE"
-                         FontSize="16"
-                         BorderThickness="0"
-                         CaretBrush="White"
-                         TextChanged="SearchBox_TextChanged" />
+            <!-- Search box with icon prefix; bottom-divider only, no border -->
+            <Border BorderBrush="#17FFFFFF" BorderThickness="0,0,0,1" Padding="2,2,2,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ContentControl Grid.Column="0"
+                                    Template="{StaticResource IconTemplate}"
+                                    Tag="{StaticResource IconSearch}"
+                                    Width="18" Height="18"
+                                    Margin="2,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBox x:Name="SearchBox"
+                             Grid.Column="1"
+                             Background="Transparent"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             FontSize="16"
+                             BorderThickness="0"
+                             CaretBrush="{DynamicResource TextPrimaryBrush}"
+                             VerticalContentAlignment="Center"
+                             TextChanged="SearchBox_TextChanged" />
+                </Grid>
             </Border>
 
-            <!-- Results list -->
-            <ListBox x:Name="ResultsList"
-                     Grid.Row="1"
-                     Margin="0,8,0,0"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                     MouseDoubleClick="ResultsList_MouseDoubleClick"
-                     KeyDown="ResultsList_KeyDown">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Margin="4,3">
-                            <Image Source="{Binding Icon}" Width="20" Height="20"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"
-                                   RenderOptions.BitmapScalingMode="HighQuality" />
-                            <StackPanel>
-                                <TextBlock Text="{Binding DisplayName}"
-                                           Foreground="#EEEEEE" FontSize="13" />
-                                <TextBlock Text="{Binding FenceName}"
-                                           Foreground="#88AAAAAA" FontSize="10" />
-                            </StackPanel>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="Foreground" Value="White" />
-                        <Setter Property="Padding" Value="4,2" />
-                        <Style.Triggers>
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="#446688CC" />
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#226688CC" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-            </ListBox>
+            <!-- Results list (with empty-state logo behind) -->
+            <Grid Grid.Row="1" Margin="0,8,0,0">
+                <StackPanel x:Name="EmptyState"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                    <Image Source="{StaticResource AppLogoImage}"
+                           Width="48" Height="48"
+                           Opacity="0.55"
+                           HorizontalAlignment="Center"/>
+                    <TextBlock Text="搜索所有 Fence 中的文件..."
+                               Foreground="{DynamicResource TextFaintBrush}"
+                               FontSize="11.5"
+                               Margin="0,12,0,0"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+                <ListBox x:Name="ResultsList"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         MouseDoubleClick="ResultsList_MouseDoubleClick"
+                         KeyDown="ResultsList_KeyDown">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="4,5" Height="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="0"
+                                       Source="{Binding Icon}" Width="22" Height="22"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DisplayName}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           FontSize="13"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding FenceName}"
+                                           Foreground="{DynamicResource TextFaintBrush}"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Margin="12,0,4,0"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            <Setter Property="Padding" Value="4,2" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd"
+                                                Background="{TemplateBinding Background}"
+                                                CornerRadius="6"
+                                                SnapsToDevicePixels="True">
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Grid>
         </Grid>
     </Border>
 </Window>
