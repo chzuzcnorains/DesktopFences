@@ -1,20 +1,21 @@
 <Window x:Class="DesktopFences.UI.Controls.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:s="clr-namespace:DesktopFences.UI.Controls.Settings"
         Title="桌面 Fence 设置"
-        Width="700" Height="570"
+        Width="960" Height="640"
+        MinWidth="780" MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent">
-    <Border Background="#EE1E1E2E"
+    <Border Background="#EE1A2036"
             CornerRadius="10"
-            BorderBrush="#55888888"
+            BorderBrush="#1AFFFFFF"
             BorderThickness="1"
             Margin="8">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.5" />
+            <DropShadowEffect BlurRadius="40" ShadowDepth="6" Opacity="0.55" />
         </Border.Effect>
         <Grid>
             <Grid.RowDefinitions>
@@ -23,351 +24,149 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Custom Title Bar -->
-            <Border Grid.Row="0" Background="#22FFFFFF"
+            <!-- Title bar -->
+            <Border Grid.Row="0" Background="#10FFFFFF"
                     CornerRadius="10,10,0,0"
+                    ClipToBounds="True"
+                    BorderBrush="#0AFFFFFF"
+                    BorderThickness="0,0,0,1"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
-                    <TextBlock Text="桌面 Fence 设置"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               FontSize="14" FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="16,0,0,0" />
-                    <Button Content="✕"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Width="36" Height="28"
-                            Margin="0,0,8,0"
-                            Style="{DynamicResource SubtleButtonStyle}"
-                            FontSize="13"
-                            Click="BtnCancel_Click" />
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Image Source="{StaticResource AppLogoImage}"
+                               Width="14" Height="14"
+                               Margin="16,0,8,0" />
+                        <TextBlock Text="DesktopFences · 设置"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Stretch">
+                        <Button Style="{StaticResource CaptionButtonStyle}"
+                                ToolTip="最小化"
+                                Click="BtnMinimize_Click">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconMin}"
+                                            Width="14" Height="14" />
+                        </Button>
+                        <Button Style="{StaticResource CaptionButtonStyle}"
+                                ToolTip="最大化"
+                                Click="BtnMaximize_Click">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconMax}"
+                                            Width="12" Height="12" />
+                        </Button>
+                        <Button Style="{StaticResource CaptionCloseButtonStyle}"
+                                ToolTip="关闭"
+                                Click="BtnCancel_Click">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconClose}"
+                                            Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Main Content -->
-            <TabControl x:Name="MainTabControl" Grid.Row="1"
-                        Background="Transparent" BorderThickness="0"
-                        Margin="16,8,16,0">
-                <TabControl.Resources>
-                    <Style TargetType="TabItem">
-                        <Setter Property="Foreground" Value="#CCCCCC" />
-                        <Setter Property="Background" Value="#33FFFFFF" />
-                        <Setter Property="Padding" Value="16,6" />
-                        <Setter Property="FontSize" Value="13" />
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="TabItem">
-                                    <Border x:Name="TabBorder"
-                                            Background="{TemplateBinding Background}"
-                                            CornerRadius="6,6,0,0"
-                                            Padding="{TemplateBinding Padding}"
-                                            Margin="0,0,2,0">
-                                        <ContentPresenter ContentSource="Header"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center" />
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="TabBorder" Property="Background" Value="#446688CC" />
-                                            <Setter Property="Foreground" Value="White" />
-                                        </Trigger>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="TabBorder" Property="Background" Value="#44FFFFFF" />
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                    <Style TargetType="TabControl">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="TabControl">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="*" />
-                                        </Grid.RowDefinitions>
-                                        <TabPanel IsItemsHost="True" Background="Transparent" />
-                                        <Border Grid.Row="1" Background="#22FFFFFF"
-                                                CornerRadius="0,6,6,6" Padding="12"
-                                                BorderBrush="#33FFFFFF" BorderThickness="1"
-                                                Margin="0,0,0,0">
-                                            <ContentPresenter ContentSource="SelectedContent" />
-                                        </Border>
-                                    </Grid>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </TabControl.Resources>
+            <!-- Body: sidebar + content -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                <!-- Tab 1: 常规设置 -->
-                <TabItem Header="常规设置">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="4">
-                        <StackPanel>
-                            <!-- Appearance -->
-                            <TextBlock Text="外观" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,10" />
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="默认 Fence 颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtFenceColor" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}" />
-                            </Grid>
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="标题栏颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtTitleBarColor" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}" />
-                            </Grid>
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="文字颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtTextColor" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}" />
-                            </Grid>
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="默认透明度" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <Slider x:Name="SliderOpacity" Grid.Column="1"
-                                        Style="{DynamicResource DarkSliderStyle}"
-                                        Minimum="0.1" Maximum="1.0" TickFrequency="0.1"
-                                        IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                            </Grid>
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="标题字号" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <Slider x:Name="SliderFontSize" Grid.Column="1"
-                                        Style="{DynamicResource DarkSliderStyle}"
-                                        Minimum="10" Maximum="20" TickFrequency="1"
-                                        IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                            </Grid>
-
-                            <!-- Tab Style -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="标签页样式" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <ComboBox x:Name="CboTabStyle" Grid.Column="1"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
-                                          SelectionChanged="CboTabStyle_SelectionChanged">
-                                    <ComboBox.ItemContainerStyle>
-                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
-                                    </ComboBox.ItemContainerStyle>
-                                </ComboBox>
-                            </Grid>
-
-                            <!-- Behavior -->
-                            <TextBlock Text="行为" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,16,0,10" />
-
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="180" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="吸附距离 (像素)" Foreground="{DynamicResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center" />
-                                <Slider x:Name="SliderSnapThreshold" Grid.Column="1"
-                                        Style="{DynamicResource DarkSliderStyle}"
-                                        Minimum="0" Maximum="30" TickFrequency="5"
-                                        IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-                            </Grid>
-
-                            <CheckBox x:Name="ChkQuickHide" Content="启用快速隐藏（双击桌面）"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-                            <!-- Startup -->
-                            <TextBlock Text="启动" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,16,0,10" />
-
-                            <CheckBox x:Name="ChkStartWithWindows" Content="随 Windows 启动"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-                            <CheckBox x:Name="ChkStartMinimized" Content="启动后最小化到托盘"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-                            <!-- Advanced -->
-                            <TextBlock Text="高级" FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,16,0,10" />
-
-                            <CheckBox x:Name="ChkCompatibilityMode" Content="兼容模式（禁用窗口层级管理）"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
-
-                            <CheckBox x:Name="ChkDebugLogging" Content="启用调试日志"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,8" />
+                <!-- Sidebar -->
+                <ListBox x:Name="NavList" Grid.Column="0"
+                         Style="{StaticResource SwNavListBoxStyle}"
+                         ItemContainerStyle="{StaticResource SwNavItemStyle}"
+                         SelectionChanged="NavList_SelectionChanged">
+                    <ListBoxItem Tag="general">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconSettings}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="常规" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
-                    </ScrollViewer>
-                </TabItem>
-
-                <!-- Tab 2: 分类规则 -->
-                <TabItem Header="分类规则">
-                    <Grid Margin="4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="200" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Left: Rule List -->
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Text="规则列表" FontSize="13" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,8" />
-
-                            <ListBox x:Name="RulesListBox" Grid.Row="1"
-                                     DisplayMemberPath="Name"
-                                     Background="{DynamicResource InputBackgroundBrush}"
-                                     Foreground="White"
-                                     BorderBrush="{DynamicResource SubtleBorderBrush}"
-                                     BorderThickness="1"
-                                     SelectionChanged="RulesListBox_SelectionChanged">
-                                <ListBox.ItemContainerStyle>
-                                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource DarkListBoxItemStyle}" />
-                                </ListBox.ItemContainerStyle>
-                            </ListBox>
-
-                            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
-                                <Button Content="添加" Width="60" Margin="0,0,8,0"
-                                        Click="BtnAddRule_Click"
-                                        Style="{DynamicResource AccentButtonStyle}" Padding="6,4" />
-                                <Button Content="删除" Width="60"
-                                        Click="BtnDeleteRule_Click"
-                                        Style="{DynamicResource DangerButtonStyle}" Padding="6,4" />
-                            </StackPanel>
-                        </Grid>
-
-                        <!-- Right: Edit Form -->
-                        <StackPanel Grid.Column="2" x:Name="EditPanel" IsEnabled="False">
-                            <TextBlock Text="编辑规则" FontSize="13" FontWeight="Bold"
-                                       Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,12" />
-
-                            <!-- Name -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="规则名称" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtRuleName" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}"
-                                         TextChanged="TxtRuleName_TextChanged" />
-                            </Grid>
-
-                            <!-- Enabled -->
-                            <CheckBox x:Name="ChkRuleEnabled" Content="启用此规则"
-                                      Style="{DynamicResource DarkCheckBoxStyle}" Margin="0,0,0,10"
-                                      Checked="RuleFieldChanged" Unchecked="RuleFieldChanged" />
-
-                            <!-- Priority -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="80" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="优先级" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtPriority" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}"
-                                         TextChanged="RuleFieldChanged" />
-                            </Grid>
-
-                            <!-- Match Type -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="匹配方式" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <ComboBox x:Name="CboMatchType" Grid.Column="1"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
-                                          SelectionChanged="CboMatchType_SelectionChanged">
-                                    <ComboBox.ItemContainerStyle>
-                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
-                                    </ComboBox.ItemContainerStyle>
-                                </ComboBox>
-                            </Grid>
-
-                            <!-- Pattern (hidden for IsDirectory) -->
-                            <Grid Margin="0,0,0,8" x:Name="PatternRow">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="匹配模式" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBox x:Name="TxtPattern" Grid.Column="1"
-                                         Style="{DynamicResource DarkTextBoxStyle}"
-                                         TextChanged="RuleFieldChanged" />
-                            </Grid>
-
-                            <!-- Pattern hint -->
-                            <TextBlock x:Name="TxtPatternHint" Grid.Column="1"
-                                       Foreground="#88AAAAAA" FontSize="11"
-                                       Margin="90,0,0,8" TextWrapping="Wrap" />
-
-                            <!-- Target Fence -->
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="目标 Fence" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <ComboBox x:Name="CboTargetFence" Grid.Column="1"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
-                                          SelectionChanged="RuleFieldChanged">
-                                    <ComboBox.ItemContainerStyle>
-                                        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
-                                    </ComboBox.ItemContainerStyle>
-                                </ComboBox>
-                            </Grid>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="appearance">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconTheme}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="外观" VerticalAlignment="Center" FontSize="13" />
                         </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="rules">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconRule}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="分类规则" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="fences">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconGrid}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="Fence 管理" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="shortcuts">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconKeyboard}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="快捷键" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="advanced">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconLock}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="高级" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="about">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Template="{StaticResource IconTemplate}"
+                                            Tag="{StaticResource IconInfo}"
+                                            Width="16" Height="16" Margin="0,0,10,0" />
+                            <TextBlock Text="关于" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+
+                <!-- Content -->
+                <ScrollViewer Grid.Column="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Padding="32,24,32,24">
+                    <Grid>
+                        <s:GeneralSettingsPane     x:Name="PaneGeneral"     Visibility="Visible" />
+                        <s:AppearanceSettingsPane  x:Name="PaneAppearance"  Visibility="Collapsed" />
+                        <s:RulesSettingsPane       x:Name="PaneRules"       Visibility="Collapsed" />
+                        <s:FencesManageSettingsPane x:Name="PaneFences"     Visibility="Collapsed" />
+                        <s:ShortcutsSettingsPane   x:Name="PaneShortcuts"   Visibility="Collapsed" />
+                        <s:AdvancedSettingsPane    x:Name="PaneAdvanced"    Visibility="Collapsed" />
+                        <s:AboutSettingsPane       x:Name="PaneAbout"       Visibility="Collapsed" />
                     </Grid>
-                </TabItem>
-            </TabControl>
+                </ScrollViewer>
+            </Grid>
 
-            <!-- Buttons -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal"
-                        HorizontalAlignment="Right" Margin="0,8,24,16">
-                <Button Content="保存" Width="80" Margin="0,0,8,0"
-                        Click="BtnSave_Click"
-                        Style="{DynamicResource AccentButtonStyle}" Padding="8,6" />
-                <Button Content="取消" Width="80"
-                        Click="BtnCancel_Click"
-                        Style="{DynamicResource DarkButtonStyle}" Padding="8,6" />
-            </StackPanel>
+            <!-- Footer buttons -->
+            <Border Grid.Row="2" Background="#08FFFFFF"
+                    BorderBrush="#0AFFFFFF" BorderThickness="0,1,0,0">
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right" Margin="0,10,24,10">
+                    <Button Content="保存" Width="80" Margin="0,0,8,0"
+                            Click="BtnSave_Click"
+                            Style="{DynamicResource AccentButtonStyle}" Padding="8,6" />
+                    <Button Content="取消" Width="80"
+                            Click="BtnCancel_Click"
+                            Style="{DynamicResource DarkButtonStyle}" Padding="8,6" />
+                </StackPanel>
+            </Border>
         </Grid>
     </Border>
 </Window>

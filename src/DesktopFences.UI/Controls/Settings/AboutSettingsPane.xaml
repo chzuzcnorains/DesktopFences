@@ -1,0 +1,22 @@
+<UserControl x:Class="DesktopFences.UI.Controls.Settings.AboutSettingsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+            <Image Source="{StaticResource AppLogoImage}" Width="48" Height="48" Margin="0,0,16,0" />
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="DesktopFences"
+                           FontSize="22" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="0.9.0 · Phase 10 · Windows x64"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+        </StackPanel>
+        <Border Style="{StaticResource SwCardStyle}" Padding="16">
+            <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12.5" TextWrapping="Wrap"
+                       LineHeight="20"
+                       Text="对标 Stardock Fences 的开源桌面整理工具。通过横向 Fence 分组、自动分类规则、Tab 合并和 Folder Portal 高效管理桌面文件。" />
+        </Border>
+    </StackPanel>
+</UserControl>

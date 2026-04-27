@@ -59,7 +59,7 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             viewModel.ExpandedHeight = viewModel.Height;
             Height = 38 + 8; // RolledUpHeight + margin
             FenceContent.UpdateRollupArrow();
-            TabRollupToggleButton.Content = "▼";
+            UpdateTabRollupIcon(true);
         }
 
         FenceContent.InteractionEnded += OnInteractionEnded;
@@ -304,7 +304,11 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
         if (_tabs.Count > 1)
         {
-            var detachItem = new MenuItem { Header = "分离为独立 Fence" };
+            var detachItem = new MenuItem
+            {
+                Header = "分离为独立 Fence",
+                Icon = FencePanel.BuildMenuIcon("IconSplit"),
+            };
             detachItem.Click += (_, _) => TabDetachRequested?.Invoke(_tabs[_activeTabIndex]);
             menu.Items.Add(detachItem);
         }
@@ -314,20 +318,32 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         // Folder Portal options (delegate to FencePanel)
         if (ViewModel.IsPortalMode)
         {
-            var changePortalItem = new MenuItem { Header = $"更改映射文件夹 ({ViewModel.PortalPath})" };
+            var changePortalItem = new MenuItem
+            {
+                Header = $"更改映射文件夹 ({ViewModel.PortalPath})",
+                Icon = FencePanel.BuildMenuIcon("IconPortal"),
+            };
             changePortalItem.Click += (_, _) => FenceContent.ShowTitleBarMenu(TabMenuButton);
             menu.Items.Add(changePortalItem);
         }
         else
         {
-            var setPortalItem = new MenuItem { Header = "设为文件夹映射..." };
+            var setPortalItem = new MenuItem
+            {
+                Header = "设为文件夹映射...",
+                Icon = FencePanel.BuildMenuIcon("IconPortal"),
+            };
             setPortalItem.Click += (_, _) => FenceContent.ShowTitleBarMenu(TabMenuButton);
             menu.Items.Add(setPortalItem);
         }
 
         menu.Items.Add(new Separator());
 
-        var closeItem = new MenuItem { Header = "关闭 Fence" };
+        var closeItem = new MenuItem
+        {
+            Header = "关闭 Fence",
+            Icon = FencePanel.BuildMenuIcon("IconTrash"),
+        };
         closeItem.Click += (_, _) =>
         {
             if (_tabs.Count > 1)
@@ -430,7 +446,13 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
         // Sync arrow state on both title bar and tab strip
         FenceContent.UpdateRollupArrow();
-        TabRollupToggleButton.Content = isRolledUp ? "▼" : "▲";
+        UpdateTabRollupIcon(isRolledUp);
+    }
+
+    private void UpdateTabRollupIcon(bool isRolledUp)
+    {
+        if (TabRollupIcon.RenderTransform is RotateTransform rt)
+            rt.Angle = isRolledUp ? 180 : 0;
     }
 
     private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)

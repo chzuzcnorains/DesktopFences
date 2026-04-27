@@ -1,0 +1,15 @@
+<UserControl x:Class="DesktopFences.UI.Controls.Settings.AdvancedSettingsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="高级" Style="{StaticResource SwPaneTitleStyle}" />
+            <TextBlock Text="桌面嵌入、诊断与危险操作。批次 9 将在这里整合兼容模式 / 调试日志 / 重置布局等开关。"
+                       Style="{StaticResource SwPaneDescStyle}" />
+        </StackPanel>
+        <Border Style="{StaticResource SwCardStyle}" Padding="16">
+            <TextBlock Text="(此页面将在批次 9 实现：兼容模式、调试日志、Win+D 检测延迟、重置布局)"
+                       Foreground="{DynamicResource TextFaintBrush}" FontSize="12" />
+        </Border>
+    </StackPanel>
+</UserControl>

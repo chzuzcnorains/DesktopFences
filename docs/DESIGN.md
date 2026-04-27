@@ -1140,7 +1140,84 @@ public enum TabStyle { Flat, Segmented, Rounded, MenuOnly }
 
 ---
 
-## 15. 参考资料
+## 15. Phase 9c 实现记录 — 图标系统
+
+**目标**：取代前期各处遗留的占位 emoji / ASCII 字符（▲ ⋯ ✕ 📁 等），为主窗口图标、托盘图标、标题栏按钮、右键菜单、搜索面板引入一套矢量图标系统。
+
+### 15.1 资产与资源
+
+| 文件 | 说明 |
+|---|---|
+| `handoff/icons/app-logo.svg` | 48×48 viewBox 主 Logo 矢量源（蓝色渐变 + 四宫格 + 高光） |
+| `handoff/icons/app-logo-mono.svg` | 托盘单色版本（`currentColor`） |
+| `handoff/icons/actions.sprite.svg` | 20 个操作图标 sprite（24×24，`stroke-width=1.8`） |
+| `handoff/icons/build-ico.ps1` | 由 AppLogo.xaml 渲染多尺寸 ICO 的 PowerShell 脚本 |
+| `src/DesktopFences.UI/Themes/AppLogo.xaml` | Logo 的 `DrawingImage` 资源字典（`AppLogoImage`、`AppLogoTopColor`、`AppLogoBottomColor`） |
+| `src/DesktopFences.UI/Themes/Icons.xaml` | 20 个操作图标 `Geometry` + `IconTemplate`（`ControlTemplate`）+ `DarkIconButtonStyle` + `CaptionButtonStyle` / `CaptionCloseButtonStyle` |
+| `src/DesktopFences.App/Assets/app.ico` | 由 `build-ico.ps1` 生成的多尺寸 ICO（16/20/24/32/40/48/64/128/256，PNG 压缩帧） |
+
+在 `App.xaml` 的 `MergedDictionaries` 中依序合并 `DarkTheme.xaml` → `TabStyles.xaml` → `AppLogo.xaml` → `Icons.xaml`。
+
+### 15.2 图标资源 Key
+
+| Key | 用途 |
+|---|---|
+| `IconSearch` | 搜索框前缀、托盘菜单、右键"搜索…" |
+| `IconSettings` | Fence 标题栏菜单入口（"⋯"）、托盘"设置…" |
+| `IconPin` / `IconLock` | 预留（置顶、锁定位置） |
+| `IconHide` | "取消文件夹映射"、显隐相关 |
+| `IconRollup` | Fence 折叠按钮（标题栏 + Tab 条），带 180° 旋转状态 |
+| `IconPeek` | Peek 桌面（Win+Space） |
+| `IconAdd` | 新建相关（托盘"新建 Fence"、Tab "+") |
+| `IconMerge` / `IconSplit` | Tab 合并提示 / "分离为独立 Fence" |
+| `IconTrash` | "关闭 Fence"、"删除" |
+| `IconRule` | 分类规则 |
+| `IconPortal` | Folder Portal（"设为文件夹映射…"、"更改映射文件夹") |
+| `IconTheme` | 主题色（预留） |
+| `IconClose` / `IconMin` / `IconMax` | 自定义窗口 caption 按钮 |
+| `IconKeyboard` | 快捷键（预留） |
+| `IconGrid` / `IconInfo` | Fence 管理 / 关于（预留） |
+
+`IconTemplate` 是 `ContentControl` 模板：Tag 绑定 `Geometry`，`Stroke="{TemplateBinding Foreground}"`、`StrokeThickness=1.8`、圆角端点。所有图标自动跟随 `TextSecondaryBrush` / `TextPrimaryBrush` 的 `Foreground` 继承。
+
+### 15.3 按钮样式
+
+- `DarkIconButtonStyle` — 26×22，圆角 4，悬停用 `HoverBrush`、按下用 `PressBrush`
+- `CaptionButtonStyle` — 继承上者，46×40，用于自定义 caption
+- `CaptionCloseButtonStyle` — 继承 CaptionButtonStyle，但**覆写了模板**：悬停 `#E0412B`、按下 `#B8331F`、前景白。原因：`DarkIconButtonStyle` 的 Template.Trigger 用 `TargetName="Bd"` 直接设置边框 `Background`，派生 Style.Trigger 无法盖过；重写模板后 `IsMouseOver` 才能真正把按钮染红
+
+### 15.4 UI 层落地点
+
+| 文件 | 变更 |
+|---|---|
+| `Controls/FencePanel.xaml` | `RollupToggleButton` / `TitleMenuButton` 删除内联 Button.Style，改用 `DarkIconButtonStyle` + `ContentControl`（`IconRollup` / `IconSettings`）。Rollup 图标带 `RotateTransform` 以便状态切换旋转 180° |
+| `Controls/FencePanel.xaml.cs` | `UpdateRollupArrow()` 由设置 `Content="▲"/"▼"` 改为设置 `RollupIcon.RenderTransform` 的旋转角。新增 `BuildMenuIcon(string geometryKey)` 静态工厂，按 HANDOFF 要求使用 `ContentControl + IconTemplate` 而非裸 `<Path>` 以保留 Foreground 继承 |
+| `Controls/FenceHost.xaml(.cs)` | Tab 条 `TabRollupToggleButton` / `TabMenuButton` 同步替换；新增 `UpdateTabRollupIcon(bool)` 处理旋转；合并/分离/关闭 Tab 右键菜单加挂 `IconSplit` / `IconPortal` / `IconTrash` |
+| `Controls/SettingsWindow.xaml` | 自定义标题栏左上插入 16×16 `AppLogoImage`；`✕` 按钮替换为 `CaptionCloseButtonStyle` + `IconClose`；为了让红色悬停不溢出到外层圆角，标题栏 `Border` 加 `ClipToBounds="True"` |
+| `Controls/SearchWindow.xaml(.cs)` | 搜索框加 `IconSearch` 前缀；结果区覆盖 64×64 `AppLogoImage` 空态层，`UpdateEmptyState()` 随结果数量切换可见性 |
+| `Themes/DarkTheme.xaml` | `DarkMenuItemStyle` 模板中 Icon `ContentPresenter` 去掉硬编码 `Visibility="Collapsed"` 初值。原模板逻辑是"Icon 为空时折叠"，但默认即折叠、又缺少"非空时显示"的 trigger，导致 `MenuItem.Icon` 始终不渲染——这是 Phase 9c 启用前没人触发过的潜在 bug |
+| `App.xaml.cs` | 无需改动：`NotifyIcon.Icon` 从 `pack://application:,,,/Assets/app.ico` 加载，随 ICO 重生成自动生效 |
+
+### 15.5 ICO 生成方案
+
+本机未装 ImageMagick / Inkscape。`build-ico.ps1` 用 WPF `XamlReader.Load` 载入 `AppLogo.xaml`，对 `AppLogoImage` 逐尺寸 `RenderTargetBitmap.Render` → `PngBitmapEncoder` 得到 PNG 帧，再手写 ICO `ICONDIR` + `ICONDIRENTRY` 头把 9 帧（16/20/24/32/40/48/64/128/256，BPP=32）拼接写入。Windows 全版本都支持内嵌 PNG 的 ICO，任务栏/Alt-Tab/资源管理器按需选帧。
+
+### 15.6 约束遵守
+
+- `DesktopFences.Core` / `DesktopFences.Shell` 零改动
+- `DarkTheme.xaml` 既有 brush key 未变；仅修复 `DarkMenuItemStyle` 中的 Icon 可见性逻辑
+- 图标系统新资源全部加在 `DesktopFences.UI/Themes/` 下，不覆盖既有 key
+- 主题色扩展（`AppLogoTopColor` / `AppLogoBottomColor` 作为资源暴露）已保留，后续实现"自定义主题色"时无需改几何
+
+### 15.7 验证
+
+- `dotnet build DesktopFences.sln -c Release` 0 警告 0 错误
+- `dotnet test tests/DesktopFences.Core.Tests` 通过 61/61
+- 视觉检查待用户在真机确认：任务栏/标题栏 Logo、Fence 折叠按钮细线条、右键菜单前缀图标对齐、设置窗关闭按钮红色悬停
+
+---
+
+## 16. 参考资料
 
 - [Stardock Fences 6 官方](https://www.stardock.com/products/fences/)
 - [Fences 版本历史](https://www.stardock.com/products/fences/history)

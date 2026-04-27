@@ -1,0 +1,15 @@
+<UserControl x:Class="DesktopFences.UI.Controls.Settings.AppearanceSettingsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="外观" Style="{StaticResource SwPaneTitleStyle}" />
+            <TextBlock Text="主题色、透明度、标题栏样式与图标渲染。批次 8 将填充实时预览与控件绑定。"
+                       Style="{StaticResource SwPaneDescStyle}" />
+        </StackPanel>
+        <Border Style="{StaticResource SwCardStyle}" Padding="16">
+            <TextBlock Text="(此页面将在批次 8 实现：Accent 色板、背景色相、透明度、模糊、图标大小、Tab 样式四卡片)"
+                       Foreground="{DynamicResource TextFaintBrush}" FontSize="12" />
+        </Border>
+    </StackPanel>
+</UserControl>

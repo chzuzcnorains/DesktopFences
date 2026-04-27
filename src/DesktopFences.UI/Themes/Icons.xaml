@@ -1,0 +1,145 @@
+<!--
+    DesktopFences.UI / Themes / Icons.xaml
+
+    Drop into DesktopFences.UI/Themes and merge from App.xaml:
+
+        [ResourceDictionary.MergedDictionaries]
+            [ResourceDictionary Source="/DesktopFences.UI;component/Themes/DarkTheme.xaml"/]
+            [ResourceDictionary Source="/DesktopFences.UI;component/Themes/Icons.xaml"/]
+        [/ResourceDictionary.MergedDictionaries]
+
+    ICON LAYER — 20 action icons as Geometry resources + reusable template.
+
+    USAGE (in any XAML):
+
+        line icon, 20px, follows Foreground:
+            [ContentControl Template="{StaticResource IconTemplate}"
+                            Tag="{StaticResource IconSearch}"
+                            Width="20" Height="20"
+                            Foreground="{DynamicResource TextSecondaryBrush}"/]
+
+        inside a Button, tight pack:
+            [Button Style="{StaticResource DarkIconButtonStyle}"
+                    Command="{Binding OpenSettingsCommand}"]
+                [ContentControl Template="{StaticResource IconTemplate}"
+                                Tag="{StaticResource IconSettings}"
+                                Width="18" Height="18"/]
+            [/Button]
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ───── Geometry resources ─────
+         All paths are in a 24×24 coordinate space.
+         Stroke-based icons use Geometry -> Path with Stroke="{TemplateBinding Foreground}".
+         Filled-fragment icons (peek dot, portal) are baked into the combined geometry. -->
+
+    <Geometry x:Key="IconSearch">M11 4.5 A6.5 6.5 0 1 1 10.999 4.5 Z M16.2 16.2 L20 20</Geometry>
+    <Geometry x:Key="IconSettings">M12 2 V5 M12 19 V22 M4.2 4.2 L6.3 6.3 M17.7 17.7 L19.8 19.8 M2 12 H5 M19 12 H22 M4.2 19.8 L6.3 17.7 M17.7 6.3 L19.8 4.2 M9.2 12 A2.8 2.8 0 1 1 9.199 12 Z</Geometry>
+    <Geometry x:Key="IconPin">M14 3 L21 10 L17 11 L13 15 L12 20 L8 16 L3 21 V20 L8 15 L4 11 L9 10 L13 6 Z</Geometry>
+    <Geometry x:Key="IconHide">M3 3 L21 21 M10.6 6.2 A10 10 0 0 1 21 12 C20.4 13.2 19.6 14.3 18.7 15.2 M6.1 6.1 C4.3 7.5 2.8 9.5 2 12 A10 10 0 0 0 15.9 17.9 M9 12 A3 3 0 1 1 8.999 12 Z</Geometry>
+    <Geometry x:Key="IconRollup">M6 9 L12 3 L18 9 M4 15 H20 M4 20 H20</Geometry>
+    <Geometry x:Key="IconPeek">M3 3 H21 V21 H3 Z M8 10 H16 M8 14 H13 M16.7 18 A1.3 1.3 0 1 1 16.699 18 Z</Geometry>
+    <Geometry x:Key="IconAdd">M3 3 H21 V21 H3 Z M12 8 V16 M8 12 H16</Geometry>
+    <Geometry x:Key="IconLock">M5 11 H19 V21 H5 Z M8 11 V8 A4 4 0 0 1 16 8 V11</Geometry>
+    <Geometry x:Key="IconMerge">M3 5 H10 V19 H3 Z M14 5 H21 V19 H14 Z M10.5 12 H13.5 M12 10.5 L13.5 12 L12 13.5</Geometry>
+    <Geometry x:Key="IconSplit">M3 5 H21 V19 H3 Z M12 5 V19</Geometry>
+    <Geometry x:Key="IconTrash">M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 20 A2 2 0 0 0 9 22 H15 A2 2 0 0 0 17 20 L18 7 M10 11 V18 M14 11 V18</Geometry>
+    <Geometry x:Key="IconRule">M4 6 H14 M4 12 H20 M4 18 H11 M16 6 A2 2 0 1 1 15.999 6 Z M12 18 A2 2 0 1 1 11.999 18 Z</Geometry>
+    <Geometry x:Key="IconPortal">M8 12 A4 9 0 1 1 7.999 12 Z M3 12 A9 4 0 1 1 2.999 12 Z</Geometry>
+    <Geometry x:Key="IconTheme">M12 3 A9 9 0 0 0 12 21 A4 4 0 0 0 12 13 A4 4 0 0 1 12 3 Z</Geometry>
+    <Geometry x:Key="IconClose">M6 6 L18 18 M18 6 L6 18</Geometry>
+    <Geometry x:Key="IconMin">M5 12 H19</Geometry>
+    <Geometry x:Key="IconMax">M5 5 H19 V19 H5 Z</Geometry>
+    <Geometry x:Key="IconKeyboard">M2 6 H22 V18 H2 Z M6 10 V10.01 M10 10 V10.01 M14 10 V10.01 M18 10 V10.01 M7 14 H17</Geometry>
+    <Geometry x:Key="IconGrid">M4 4 H11 V11 H4 Z M13 4 H20 V11 H13 Z M4 13 H11 V20 H4 Z M13 13 H20 V20 H13 Z</Geometry>
+    <Geometry x:Key="IconInfo">M3 12 A9 9 0 1 1 2.999 12 Z M12 11 V16 M12 8 V8.01</Geometry>
+
+    <!-- ───── Icon template ─────
+         ContentControl-based template: Tag holds the Geometry, Foreground drives stroke. -->
+    <ControlTemplate x:Key="IconTemplate" TargetType="ContentControl">
+        <Viewbox Stretch="Uniform">
+            <Path Data="{TemplateBinding Tag}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="1.8"
+                  StrokeLineJoin="Round"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  Width="24" Height="24"
+                  SnapsToDevicePixels="True"
+                  UseLayoutRounding="True"/>
+        </Viewbox>
+    </ControlTemplate>
+
+    <!-- ───── Icon button style ─────
+         Square hover target; inherits text color; matches existing ts-btn /
+         sw-wc affordances from the prototype. Use everywhere an icon-only
+         button was previously drawn as inline SVG. -->
+    <Style x:Key="DarkIconButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="4"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PressBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ───── Window caption-button variants ─────
+         40×40 for SettingsWindow custom chrome. `close` uses danger hover. -->
+    <Style x:Key="CaptionButtonStyle" TargetType="Button" BasedOn="{StaticResource DarkIconButtonStyle}">
+        <Setter Property="Width" Value="46"/>
+        <Setter Property="Height" Value="40"/>
+    </Style>
+    <Style x:Key="CaptionCloseButtonStyle" TargetType="Button" BasedOn="{StaticResource CaptionButtonStyle}">
+        <!-- Override the template so IsMouseOver paints the danger red.
+             The base style's template trigger sets Bd.Background directly,
+             which would otherwise shadow a Style.Trigger on Button.Background. -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="0"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#E0412B"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#B8331F"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

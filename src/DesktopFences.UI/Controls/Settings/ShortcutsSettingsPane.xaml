@@ -1,0 +1,15 @@
+<UserControl x:Class="DesktopFences.UI.Controls.Settings.ShortcutsSettingsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="快捷键" Style="{StaticResource SwPaneTitleStyle}" />
+            <TextBlock Text="已注册的全局与窗口快捷键一览。"
+                       Style="{StaticResource SwPaneDescStyle}" />
+        </StackPanel>
+        <Border Style="{StaticResource SwCardStyle}" Padding="16">
+            <TextBlock Text="(此页面将在批次 9 实现：分组列表展示已注册快捷键)"
+                       Foreground="{DynamicResource TextFaintBrush}" FontSize="12" />
+        </Border>
+    </StackPanel>
+</UserControl>

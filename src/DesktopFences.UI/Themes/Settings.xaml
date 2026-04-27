@@ -1,0 +1,128 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ══════════════════════════════════════════════════════
+         Settings window — sidebar + card/row primitives
+         (v2 prototype: desktop-v2.html .sw-side / .sw-card / .sw-row)
+         ══════════════════════════════════════════════════════ -->
+
+    <SolidColorBrush x:Key="SwSidebarBackgroundBrush" Color="#2E000000" />
+    <SolidColorBrush x:Key="SwCardBackgroundBrush" Color="#06FFFFFF" />
+    <SolidColorBrush x:Key="SwCardBorderBrush" Color="#0DFFFFFF" />
+    <SolidColorBrush x:Key="SwRowDividerBrush" Color="#0AFFFFFF" />
+    <SolidColorBrush x:Key="SwNavHoverBrush" Color="#0DFFFFFF" />
+    <SolidColorBrush x:Key="SwNavActiveBrush" Color="#14FFFFFF" />
+
+    <!-- Pane title (22px / SemiBold) -->
+    <Style x:Key="SwPaneTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SwPaneDescStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="560" />
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+
+    <Style x:Key="SwSectionHeaderStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SwSectionDescStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style x:Key="SwRowLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="SwRowDescStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="420" />
+        <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+
+    <!-- Card container: rounded translucent block, optional inner divider via Tag="head" on first child -->
+    <Style x:Key="SwCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource SwCardBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SwCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- Row inside a card: 1px bottom divider, can be suppressed with Tag="last" -->
+    <Style x:Key="SwRowStyle" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource SwRowDividerBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="0,12" />
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="last">
+                <Setter Property="BorderThickness" Value="0" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Sidebar nav ListBox -->
+    <Style x:Key="SwNavListBoxStyle" TargetType="ListBox">
+        <Setter Property="Background" Value="{StaticResource SwSidebarBackgroundBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,1,0" />
+        <Setter Property="BorderBrush" Value="{StaticResource SwCardBorderBrush}" />
+        <Setter Property="Padding" Value="10,12" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <!-- Sidebar nav ListBoxItem template: hover bg + active accent bar -->
+    <Style x:Key="SwNavItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd"
+                            Background="Transparent"
+                            CornerRadius="6"
+                            Padding="12,8">
+                        <Grid>
+                            <Border x:Name="ActiveBar"
+                                    Width="3"
+                                    HorizontalAlignment="Left"
+                                    Margin="-12,2,0,2"
+                                    Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="2"
+                                    Visibility="Collapsed" />
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SwNavHoverBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SwNavActiveBrush}" />
+                            <Setter TargetName="ActiveBar" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

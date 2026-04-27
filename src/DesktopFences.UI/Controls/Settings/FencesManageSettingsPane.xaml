@@ -1,0 +1,15 @@
+<UserControl x:Class="DesktopFences.UI.Controls.Settings.FencesManageSettingsPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="Fence 管理" Style="{StaticResource SwPaneTitleStyle}" />
+            <TextBlock Text="活动 Fence 一览；关闭的 Fence 会保留在最近关闭列表，随时可以恢复。"
+                       Style="{StaticResource SwPaneDescStyle}" />
+        </StackPanel>
+        <Border Style="{StaticResource SwCardStyle}" Padding="16">
+            <TextBlock Text="(此页面将在批次 9 实现：活动 / 最近关闭 分段控件 + 卡片列表)"
+                       Foreground="{DynamicResource TextFaintBrush}" FontSize="12" />
+        </Border>
+    </StackPanel>
+</UserControl>
