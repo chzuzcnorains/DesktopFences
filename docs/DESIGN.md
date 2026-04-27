@@ -576,12 +576,16 @@ DebugLogging           = false
 
 **持久化**：通过 `ILayoutStore.LoadSettingsAsync()` / `SaveSettingsAsync()` 读写 `%APPDATA%\DesktopFences\settings.json`，原子写入。
 
-**设置窗口**（`SettingsWindow.xaml`，统一窗口，TabControl 切换）：
-- **Tab 1 "常规设置"**：四分组 — 外观（颜色文本框 + 透明度/字体滑块）/ 行为（Snap 阈值滑块 + Quick Hide 复选框）/ 启动（开机自启 + 启动最小化）/ 高级（兼容模式 + 调试日志）
-- **Tab 2 "分类规则"**：双面板 — 左侧规则列表 + 添加/删除按钮，右侧编辑表单（名称、启用、优先级、匹配方式、匹配模式、目标 Fence）
+**设置窗口**（`SettingsWindow.xaml`，侧栏导航 + 7 面板，Phase 10 重构）：
+- 220px 侧栏 ListBox 7 项导航：常规 / 外观 / 分类规则 / Fence 管理 / 快捷键 / 高级 / 关于
+- 自定义标题栏：14px AppLogoImage + Min/Max/Close 三按钮 + 双击最大化
+- 内容区按 Visibility 切换 7 个 UserControl 面板（`Controls/Settings/` 目录）
+- **常规面板**（`GeneralSettingsPane`）：四分组 — 外观 / 行为 / 启动 / 高级，暴露 `Load/Save(AppSettings)`
+- **规则面板**（`RulesSettingsPane`）：双面板 — 左侧规则列表 + 添加/删除，右侧编辑表单，暴露 `Initialize/GetRules`
+- 其余 5 个面板（外观 / Fence 管理 / 快捷键 / 高级 / 关于）Phase 10 进行中
 - `SettingsSaved` 事件 → `App.OnSettingsSaved()` → 即时应用主题 + 更新 StartupManager + 更新 QuickHideManager
 - `RulesSaved` 事件 → `App._rules = newRules` → `SaveRulesAsync()` + `ReEvaluateClassifiedFiles()`
-- 托盘菜单"分类规则..."直接打开设置窗口并定位到分类规则 Tab（`SelectTab(1)`）
+- 托盘菜单"分类规则..."直接打开设置窗口并定位到规则面板（`SelectTab(1)`，映射到侧栏第 3 项）
 
 ### 9.4 快捷搜索
 
@@ -634,9 +638,9 @@ dotnet publish src/DesktopFences.App -c Release /p:PublishProfile=win-x64-self-c
 
 ## 10. 规则编辑器与默认分类配置
 
-### 10.1 规则编辑器（已合并至 SettingsWindow）
+### 10.1 规则编辑器（已合并至 SettingsWindow → RulesSettingsPane）
 
-规则编辑器已从独立的 `RuleEditorWindow` 合并到 `SettingsWindow` 的第二个 Tab 页。详见 9.3 节"Tab 2 分类规则"。
+规则编辑器已从独立的 `RuleEditorWindow` 合并到 `SettingsWindow`，Phase 10 进一步拆分为独立的 `RulesSettingsPane` UserControl。详见 16.7 节。
 
 **事件流**：
 ```
@@ -648,7 +652,7 @@ CboMatchType.SelectionChanged → ApplyFormToRule() + UpdatePatternHint()
 BtnSave → 触发 SettingsSaved + RulesSaved → App 即时应用
 ```
 
-**打开入口**：托盘菜单"分类规则..."→ `ShowSettings(1)` 直接跳转到规则 Tab
+**打开入口**：托盘菜单"分类规则..."→ `ShowSettings(1)` → `SelectTab(1)` 映射到侧栏第 3 项（rules）
 
 ### 10.2 IsDirectory 规则类型
 
@@ -1217,7 +1221,174 @@ public enum TabStyle { Flat, Segmented, Rounded, MenuOnly }
 
 ---
 
-## 16. 参考资料
+## 16. Phase 10 实现记录 — 视觉系统升级与原型落地
+
+**目标**：将 WPF 工程视觉与交互对齐 `desktop-v2.html` v2 原型。涵盖颜色系统、文件图标、Fence 外观反馈、设置窗口侧栏导航重构。
+
+**关键决策**：
+- 主题色从 OKLCH 近似为 sRGB（WPF 不支持 OKLCH），新增语义 Brush 而不破坏已有 key
+- 文件图标采用 14 套自绘彩色文档图标 + 字母叠加方案，保留 Shell 图标作为设置可切换项
+- Acrylic 玻璃质感用半透明 Background + DropShadowEffect 近似（WPF 不支持原生 `backdrop-filter`）
+- SettingsWindow 从顶部 TabControl 改为 220px 侧栏导航 + 7 面板
+
+### 16.1 文件类型图标资源（批次 1）
+
+**新增文件**：
+
+| 文件 | 说明 |
+|---|---|
+| `Themes/FileTypes.xaml` | 14 个 `DrawingImage`：FileIconFolder/Doc/Xls/Ppt/Pdf/Img/Video/Music/Code/Zip/Exe/Txt/Link/Ttf |
+| `Converters/FileKindToIconConverter.cs` | 扩展名 → DrawingImage 资源 Key 查表 |
+| `Converters/LabelLenToFontSizeConverter.cs` | `length==0→0`（文件夹隐藏字母）、`≤2→11`、`>2→8.5` |
+
+**FileItemViewModel 扩展**：
+- `string KindLabel` — 基于扩展名查表返回 `W`/`X`/`P`/`PDF`/`IMG`/`MP4`/`♪`/`<>`/`ZIP`/`EXE`/`TXT`/`↗`/`Aa`，文件夹返回 `""`
+
+### 16.2 文件图标双模式切换（批次 2）
+
+**AppSettings 新增**：
+- `bool UseCustomFileIcons { get; set; } = true` — 自绘/Shell 切换开关
+- `int IconSize { get; set; } = 44` — 图标大小 28-64
+
+**FencePanel.xaml 内嵌 DataTemplate**：
+- `CustomFileTile` — 使用 FileTypes DrawingImage + KindLabel 字母叠加
+- `ShellFileTile` — 使用 `{Binding Icon}` 走 ShellIconExtractor
+- `FileIconSelector`（`DataTemplateSelector`）— 根据 `UseCustomFileIcons` 选择模板
+
+**刷新机制**：`FencePanel.RefreshFileTileTemplate()` 在启动加载和 `OnSettingsSaved` 时调用，重新应用 `ItemTemplateSelector`。
+
+### 16.3 DarkTheme 色板升级（批次 3）
+
+**OKLCH → sRGB 近似色板**：
+
+| Key | 旧值 | 新值 | 用途 |
+|---|---|---|---|
+| `AccentColor` | `#6688CC` | `#7AA7E6` | 主强调色 |
+| `DangerColor` | `#CC4444` | `#E0412B` | 危险动作 |
+| `TextPrimaryColor` | `#EEEEEE` | `#E8ECF4` | 正文 |
+| `TextSecondaryColor` | `#AACCCCCC` | `#AEB8CC` | 次要文字 |
+| `FenceBaseColor` | `#1E1E2E` | `#1A2036` | Fence 背景基 |
+| `FenceBackgroundBrush` | `#CC1E1E2E` | `#CC1A2036` | Fence 半透明背景 |
+
+**新增语义 Brush**：
+
+| Key | 值 | 用途 |
+|---|---|---|
+| `AccentStrongBrush` | `#5A82DC` | 选中/glow |
+| `MergeTargetBrush` | `#6BD49A` | 合并高亮（teal） |
+| `TitleBarActiveBrush` | `#594E78B8` | 激活 Tab 背景 |
+| `FenceBorderBrush` | `#17FFFFFF` | Fence 常态边框 |
+| `FenceBorderStrongBrush` | `#2EFFFFFF` | Fence 聚焦边框 |
+| `TextFaintBrush` | `#7B8296` | 淡化文字 |
+| `FocusBorderBrush` | `#887AA7E6` | 输入框焦点边框（更新） |
+
+**新增 Effect 资源**：
+- `FenceShadowEffect` — `DropShadowEffect(BlurRadius=32, ShadowDepth=12, Opacity=0.45, Direction=270)`
+
+**动态资源支持**：`AccentBrush` / `AccentStrongBrush` 改为 `DynamicResource` 引用，为后续主题色实时切换铺路。
+
+### 16.4 FencePanel 外观与三态 glow 反馈（批次 4）
+
+**FencePanelViewModel 新增属性**：
+- `bool IsFocused` — 窗口激活状态
+- `bool IsDropHover` — 文件拖入悬停
+- `bool IsMergeTarget` — 合并拖拽目标
+
+**FencePanel.xaml 变更**：
+- `CornerRadius` 8 → 10（含 showTabs 模式 `0,0,10,10`）
+- `FenceBorder.Effect` 改引用 `FenceShadowEffect`，`BorderBrush` 换 `FenceBorderBrush`
+- `IsFocused=True` 时 `BorderBrush` 切到 `FenceBorderStrongBrush`
+- 新增 `GlowBorder` 层，Style Triggers 按优先级 IsMergeTarget（teal glow）> IsDropHover（accent 蓝色 glow）> IsFocused（白色 glow）切换 `DropShadowEffect`
+
+**交互实现**：
+- `OnDragOver` → `IsDropHover=true`；`OnDragLeave`/`OnDrop` → 清零
+- `OnLoaded`/`OnUnloaded` 订阅 host Window `Activated`/`Deactivated` 同步 `IsFocused`
+
+### 16.5 ContextMenu 与 SearchWindow 视觉对齐（批次 5）
+
+**DarkTheme.xaml 调整**：
+- `DarkContextMenuStyle`：背景 `#EB1C2030`、DropShadow BlurRadius=40/Opacity=0.5、圆角 8、Padding 6,4
+- `DarkMenuItemStyle`：Padding 12,6、字号 12.5、Foreground 改 `DynamicResource`
+- 新增 `DarkDangerMenuItemStyle`（BasedOn DarkMenuItemStyle）：Foreground=`#E8896F`、hover=`#804E1F10`
+
+**SearchWindow.xaml 对齐**：
+- 宽 520 / 高 420，背景 `#EB161A2A`，BorderBrush `#1AFFFFFF`
+- DropShadow BlurRadius=40 / Opacity=0.5
+- 输入框底部 1px 分隔线（去卡片背景）
+- IconSearch 18px，结果项 3 栏布局（icon 22 / name / hint）
+- 空态 AppLogo 48px + "搜索所有 Fence 中的文件..."
+
+### 16.6 AppSettings 扩展与 TabStyles 精修（批次 6）
+
+**AppSettings 新增字段**：
+
+```csharp
+public string AccentColor { get; set; } = "#7AA7E6";
+public int FenceBgHue { get; set; } = 220;        // 0-360
+public double FenceOpacity { get; set; } = 0.85;   // 0.2-0.9
+public int FenceBlurRadius { get; set; } = 26;     // 0-60
+public List<string> RecentClosedFences { get; set; } = new(); // FIFO ≤20
+```
+
+**TabStyles.xaml 四样式精修**：
+
+| 样式 | 关键变更 |
+|---|---|
+| Flat | 顶部圆角 6,6,0,0 + active 用 `TitleBarActiveBrush` + `AccentBrush` 底线 |
+| Segmented | Pill 圆角 14 + active accent 渐变填色 |
+| Rounded | 顶部圆角 10,10,0,0 + active 浅 tint + accent 底线 |
+| MenuOnly | Tab strip 不渲染，仅标题栏菜单切换 |
+
+硬编码 `#6688CC` 全部换为 `DynamicResource AccentBrush`。
+
+### 16.7 SettingsWindow 侧栏导航重构（批次 7）
+
+**架构变更**：从顶部 TabControl（2 Tab）改为 220px 侧栏 + 7 面板内容区。
+
+**窗口布局**：
+- 尺寸 960×640（原 700×570），MinWidth=780，MinHeight=520
+- 3 行 Grid：标题栏（40px）/ Body（220px 侧栏 + 内容区）/ Footer（保存/取消按钮）
+- 标题栏：14px AppLogoImage + "DesktopFences · 设置" + Min/Max/Close 三按钮（CaptionButtonStyle/CaptionCloseButtonStyle）
+- 侧栏：ListBox 7 项，每项 IconTemplate 图标 + 文字，激活项左侧 3px Accent 指示条
+- 内容区：ScrollViewer 包裹 Grid，7 个 UserControl 按 Visibility 切换
+- 背景 `#EE1A2036`，DropShadow BlurRadius=40
+
+**7 个面板 UserControl**（`Controls/Settings/` 目录）：
+
+| 面板 | 状态 | 说明 |
+|---|---|---|
+| `GeneralSettingsPane` | 完整 | 搬迁原"常规设置"：外观/行为/启动/高级四分组，暴露 `Load(AppSettings)` / `Save(AppSettings)` |
+| `RulesSettingsPane` | 完整 | 搬迁原"分类规则"：规则列表 + 编辑表单 + 11 个事件处理，暴露 `Initialize(rules, fences)` / `GetRules()` |
+| `AppearanceSettingsPane` | 占位 | 待批次 8 实现（Accent swatch / 色相 slider / 透明度 / 模糊 / 图标大小 / Tab 样式） |
+| `FencesManageSettingsPane` | 占位 | 待批次 9 实现（活动/最近关闭） |
+| `ShortcutsSettingsPane` | 占位 | 待批次 9 实现（快捷键表格） |
+| `AdvancedSettingsPane` | 占位 | 待批次 9 实现（兼容模式/调试日志） |
+| `AboutSettingsPane` | 占位 | 48px AppLogo + 版本号 + 描述 |
+
+**SettingsWindow.xaml.cs 瘦身**：仅保留 `_settings` 字段 + `SettingsSaved`/`RulesSaved` 事件 + Min/Max/Close/Save/Cancel + `NavList_SelectionChanged`（按 Tag 切 Visibility）+ `SelectTab(int legacyIndex)` 兼容旧调用（0→general，1→rules）。
+
+**共享样式**（`Themes/Settings.xaml`）：
+
+| 样式 Key | 目标 | 特点 |
+|---|---|---|
+| `SwNavListBoxStyle` | ListBox | 侧栏导航容器，无边框无背景 |
+| `SwNavItemStyle` | ListBoxItem | 激活项左侧 3px `AccentBrush` 指示条（ActiveBar Border） |
+| `SwCardStyle` | Border | `#06FFFFFF` 背景、`#0DFFFFFF` 边框、圆角 8 |
+| `SwRowStyle` | Border | 底部 1px `#0AFFFFFF` 分隔线 |
+| `SwPaneTitleStyle` | TextBlock | 20px 加粗主标题 |
+| `SwPaneDescStyle` | TextBlock | 12px 次要描述 |
+| `SwSectionHeaderStyle` | TextBlock | 14px 分组标题 |
+
+### 16.8 待完成（批次 8-11）
+
+- **批次 8**：AppearanceSettingsPane + FencePreviewControl 实时预览
+- **批次 9**：FencesManage/Shortcuts/Advanced/About 4 个面板完整实现
+- **批次 10**：最近关闭 Fence 完整链路（FIFO + 恢复入口）
+- **批次 11**：文档收尾
+
+---
+
+## 17. 参考资料
 
 - [Stardock Fences 6 官方](https://www.stardock.com/products/fences/)
 - [Fences 版本历史](https://www.stardock.com/products/fences/history)
