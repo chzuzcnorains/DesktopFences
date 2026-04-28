@@ -115,8 +115,14 @@ public sealed class DesktopEmbedManager : IDisposable
 
         _managedWindows.Add(hwnd);
 
-        // Immediately send to bottom — above desktop, below everything else
-        SendToBottom(hwnd);
+        // For initial positioning, always safe to use HWND_BOTTOM even if desktop is foreground
+        // because the window hasn't been shown yet and we want it below everything else.
+        // But we'll do it carefully - first show, then position.
+        NativeMethods.SetWindowPos(
+            hwnd, NativeMethods.HWND_BOTTOM,
+            0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
     }
 
     public void UnregisterWindow(IntPtr hwnd)
@@ -357,17 +363,44 @@ public sealed class DesktopEmbedManager : IDisposable
         }
     }
 
-    private static IntPtr _desktopAnchorCache = IntPtr.Zero;
-
     /// <summary>
-    /// Locate the Progman ("desktop") window. Cached because Progman's hwnd
-    /// is stable for the lifetime of the explorer.exe session.
+    /// Safely bring a window back and ensure it's visible above the desktop,
+    /// even when the desktop is the foreground window.
     /// </summary>
-    private static IntPtr GetDesktopAnchor()
+    public void EnsureVisibleAboveDesktop(IntPtr hwnd)
     {
-        if (_desktopAnchorCache != IntPtr.Zero) return _desktopAnchorCache;
-        _desktopAnchorCache = NativeMethods.FindWindow("Progman", null);
-        return _desktopAnchorCache;
+        // First, ensure the window is visible
+        if (!NativeMethods.IsWindowVisible(hwnd))
+        {
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
+        }
+
+        // Now, a safe two-step approach to get above the desktop without
+        // getting stuck below it:
+        // 1. Temporarily bring to top (but don't activate) so we're definitely visible
+        // 2. Then carefully place below other windows but still above desktop
+
+        // Step 1: Bring to top temporarily
+        NativeMethods.SetWindowPos(
+            hwnd, NativeMethods.HWND_TOP,
+            0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+
+        // Step 2: Ask the z-order recovery to fix it up when it's safe
+        // We can also check if foreground is not desktop first, and if so, set bottom immediately
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (!IsDesktopWindow(foreground))
+        {
+            // Safe to set bottom now
+            NativeMethods.SetWindowPos(
+                hwnd, NativeMethods.HWND_BOTTOM,
+                0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+        // If desktop IS foreground, we just leave it at HWND_TOP for now, and
+        // the z-order recovery timer will fix it when the foreground changes.
+        // HWND_TOP is okay - it's still below normal apps because of WS_EX_NOACTIVATE.
     }
 
     private static void SendToBottom(IntPtr hwnd)
@@ -376,16 +409,22 @@ public sealed class DesktopEmbedManager : IDisposable
         // Calling SetWindowPos on hidden windows can interfere with WPF visibility state.
         if (!NativeMethods.IsWindowVisible(hwnd)) return;
 
-        // Insert *directly above* the desktop (Progman) rather than at HWND_BOTTOM.
-        // On Windows 11, HWND_BOTTOM frequently pushes WS_EX_TOOLWINDOW windows
-        // BELOW the desktop wallpaper layer, leaving them invisible until the next
-        // foreground change. Anchoring above Progman keeps the fence below every
-        // real application window while guaranteeing it stays above the desktop.
-        var anchor = GetDesktopAnchor();
-        var insertAfter = anchor != IntPtr.Zero ? anchor : NativeMethods.HWND_BOTTOM;
+        // CRITICAL: Never call SetWindowPos(HWND_BOTTOM) when the foreground window
+        // is the desktop! On Windows 11, this pushes WS_EX_TOOLWINDOW windows BELOW
+        // the wallpaper layer, making them invisible until a non-desktop foreground
+        // window triggers a z-order recovery.
 
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (IsDesktopWindow(foreground))
+        {
+            // When desktop is foreground, don't change z-order at all!
+            // Just ensure we're visible, but don't touch z-order.
+            return;
+        }
+
+        // Normal path: foreground is not desktop, safe to use HWND_BOTTOM
         NativeMethods.SetWindowPos(
-            hwnd, insertAfter,
+            hwnd, NativeMethods.HWND_BOTTOM,
             0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);

@@ -741,16 +741,16 @@ public partial class FencePanel : UserControl
             var targetHeight = ViewModel.ExpandedHeight > 0
                 ? ViewModel.ExpandedHeight
                 : FencePanelViewModel.MinHeight;
-            RollupChanged?.Invoke(false, targetHeight + 8);
+            RollupChanged?.Invoke(false, targetHeight);
         }
         else
         {
             var win = Window.GetWindow(this);
             if (win is not null)
-                ViewModel.ExpandedHeight = win.Height - 8;
+                ViewModel.ExpandedHeight = win.Height;
             ViewModel.IsRolledUp = true;
             _isHoverExpanded = false;
-            RollupChanged?.Invoke(true, RolledUpHeight + 8);
+            RollupChanged?.Invoke(true, RolledUpHeight);
         }
         UpdateRollupArrow();
         InteractionEnded?.Invoke();
@@ -781,14 +781,14 @@ public partial class FencePanel : UserControl
         var targetHeight = ViewModel.ExpandedHeight > 0
             ? ViewModel.ExpandedHeight
             : FencePanelViewModel.MinHeight;
-        RollupChanged?.Invoke(false, targetHeight + 8);
+        RollupChanged?.Invoke(false, targetHeight);
     }
 
     public void HoverCollapse()
     {
         if (ViewModel is null || !ViewModel.IsRolledUp || !_isHoverExpanded) return;
         _isHoverExpanded = false;
-        RollupChanged?.Invoke(true, RolledUpHeight + 8);
+        RollupChanged?.Invoke(true, RolledUpHeight);
     }
 
     /// <summary>

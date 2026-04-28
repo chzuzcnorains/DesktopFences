@@ -72,14 +72,14 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         // Sync window geometry from ViewModel
         Left = viewModel.X;
         Top = viewModel.Y;
-        Width = viewModel.Width + 8;   // +8 for Margin="4" on each side
-        Height = viewModel.Height + 8;
+        Width = viewModel.Width;   // No margin anymore
+        Height = viewModel.Height;
 
         // If fence was saved in rolled-up state, apply it
         if (viewModel.IsRolledUp)
         {
             viewModel.ExpandedHeight = viewModel.Height;
-            Height = 38 + 8; // RolledUpHeight + margin
+            Height = 38; // RolledUpHeight only, no margin
             FenceContent.UpdateRollupArrow();
             UpdateTabRollupIcon(true);
         }
@@ -444,8 +444,8 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     private void OnInteractionEnded()
     {
         var tabStripHeight = _tabs.Count > 1 ? 28.0 : 0.0;
-        var w = Math.Max(Width - 8, FencePanelViewModel.MinWidth);
-        var h = Math.Max(Height - 8 - tabStripHeight, FencePanelViewModel.MinHeight);
+        var w = Math.Max(Width, FencePanelViewModel.MinWidth);
+        var h = Math.Max(Height - tabStripHeight, FencePanelViewModel.MinHeight);
 
         foreach (var tab in _tabs)
         {

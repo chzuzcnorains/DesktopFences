@@ -10,8 +10,8 @@
         ResizeMode="NoResize"
         Topmost="False"
         SizeToContent="Manual">
-    <!-- Outer margin for drop shadow space -->
-    <Grid Margin="4">
+    <!-- Outer margin for drop shadow space - set to 0 to remove the "border" gap -->
+    <Grid Margin="0">
         <Grid.RowDefinitions>
             <!-- Tab strip row — Height=0 when single panel, 28 when tabbed -->
             <RowDefinition x:Name="TabRow" Height="0" />
