@@ -67,7 +67,8 @@
       "Bash(dotnet run *)",
       "Bash(taskkill /f /im DesktopFences.App.exe)",
       "Bash(taskkill /f /pid 31264)",
-      "PowerShell(Stop-Process *)"
+      "PowerShell(Stop-Process *)",
+      "Bash(git show *)"
     ]
   }
 }

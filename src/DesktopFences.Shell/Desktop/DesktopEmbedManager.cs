@@ -260,8 +260,16 @@ public sealed class DesktopEmbedManager : IDisposable
         // Don't interfere during drag — prevents panels disappearing while snapping
         if (_isDragging) return;
 
-        // If the activated window is one of our managed windows, ignore
+        // Ignore activation of our own managed windows
         if (_managedWindows.Contains(hwnd)) return;
+
+        // Ignore activation of any window belonging to our own process (e.g. context menus, dialogs)
+        // Prevents our own UI elements from dismissing Win+D topmost state
+        uint foregroundProcessId;
+        NativeMethods.GetWindowThreadProcessId(hwnd, out foregroundProcessId);
+        var currentProcessId = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+        if (foregroundProcessId == currentProcessId)
+            return;
 
         if (_isTopmost)
         {
@@ -443,17 +451,39 @@ public sealed class DesktopEmbedManager : IDisposable
         NativeMethods.GetClassName(hwnd, sb, sb.Capacity);
         var className = sb.ToString();
 
+        // 桌面本身
         if (className is "Progman" or "WorkerW" or "SHELLDLL_DefView" or "SysListView32")
             return true;
 
-        // Check parent chain
+        // 任务栏相关
+        if (className is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
+            return true;
+
+        // Windows 标准菜单类，如果父窗口是任务栏，也认为是桌面相关
+        if (className == "#32768")
+        {
+            // 检查父链是否包含任务栏
+            var menuParent = NativeMethods.GetParent(hwnd);
+            while (menuParent != IntPtr.Zero)
+            {
+                sb.Clear();
+                NativeMethods.GetClassName(menuParent, sb, sb.Capacity);
+                var menuParentClass = sb.ToString();
+                if (menuParentClass is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
+                    return true;
+                menuParent = NativeMethods.GetParent(menuParent);
+            }
+        }
+
+        // 检查父链是否包含桌面或任务栏相关窗口
         var parent = NativeMethods.GetParent(hwnd);
         while (parent != IntPtr.Zero)
         {
             sb.Clear();
             NativeMethods.GetClassName(parent, sb, sb.Capacity);
             var parentClass = sb.ToString();
-            if (parentClass is "Progman" or "WorkerW" or "SHELLDLL_DefView")
+            if (parentClass is "Progman" or "WorkerW" or "SHELLDLL_DefView"
+                or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
                 return true;
             parent = NativeMethods.GetParent(parent);
         }
