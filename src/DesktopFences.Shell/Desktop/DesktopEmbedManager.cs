@@ -357,14 +357,35 @@ public sealed class DesktopEmbedManager : IDisposable
         }
     }
 
+    private static IntPtr _desktopAnchorCache = IntPtr.Zero;
+
+    /// <summary>
+    /// Locate the Progman ("desktop") window. Cached because Progman's hwnd
+    /// is stable for the lifetime of the explorer.exe session.
+    /// </summary>
+    private static IntPtr GetDesktopAnchor()
+    {
+        if (_desktopAnchorCache != IntPtr.Zero) return _desktopAnchorCache;
+        _desktopAnchorCache = NativeMethods.FindWindow("Progman", null);
+        return _desktopAnchorCache;
+    }
+
     private static void SendToBottom(IntPtr hwnd)
     {
         // Skip windows that are intentionally hidden (e.g. page switch, toggle).
         // Calling SetWindowPos on hidden windows can interfere with WPF visibility state.
         if (!NativeMethods.IsWindowVisible(hwnd)) return;
 
+        // Insert *directly above* the desktop (Progman) rather than at HWND_BOTTOM.
+        // On Windows 11, HWND_BOTTOM frequently pushes WS_EX_TOOLWINDOW windows
+        // BELOW the desktop wallpaper layer, leaving them invisible until the next
+        // foreground change. Anchoring above Progman keeps the fence below every
+        // real application window while guaranteeing it stays above the desktop.
+        var anchor = GetDesktopAnchor();
+        var insertAfter = anchor != IntPtr.Zero ? anchor : NativeMethods.HWND_BOTTOM;
+
         NativeMethods.SetWindowPos(
-            hwnd, NativeMethods.HWND_BOTTOM,
+            hwnd, insertAfter,
             0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);

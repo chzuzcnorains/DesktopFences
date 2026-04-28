@@ -25,12 +25,25 @@ public partial class FencePanel : UserControl
 
     public static readonly DependencyProperty ShowTitleBarProperty =
         DependencyProperty.Register(nameof(ShowTitleBar), typeof(bool), typeof(FencePanel),
-            new PropertyMetadata(true));
+            new PropertyMetadata(true, OnShowTitleBarChanged));
 
     public bool ShowTitleBar
     {
         get => (bool)GetValue(ShowTitleBarProperty);
         set => SetValue(ShowTitleBarProperty, value);
+    }
+
+    // Collapse the title-bar row when in tab mode so the fence body sits
+    // flush against the tab strip — otherwise the empty 30px row above
+    // the file list renders a visible seam at the tab/body boundary.
+    private static void OnShowTitleBarChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is FencePanel panel && panel.TitleBarRow is not null)
+        {
+            panel.TitleBarRow.Height = (bool)e.NewValue
+                ? new GridLength(30)
+                : new GridLength(0);
+        }
     }
 
     public event Action? InteractionStarted;
@@ -338,6 +351,10 @@ public partial class FencePanel : UserControl
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Ignore double-clicks — WM_NCLBUTTONDBLCLK is handled in FenceHost.WndProc.
+        // Letting a double-click through would restart the drag loop unexpectedly.
+        if (e.ClickCount != 1) return;
+
         if (e.LeftButton == MouseButtonState.Pressed)
         {
             InteractionStarted?.Invoke();
@@ -539,6 +556,10 @@ public partial class FencePanel : UserControl
         _hostWindow.Activated += OnHostActivated;
         _hostWindow.Deactivated += OnHostDeactivated;
         if (ViewModel is not null) ViewModel.IsFocused = _hostWindow.IsActive;
+
+        // Re-sync the title-bar row height in case ShowTitleBar was toggled
+        // before the named row was reachable from the dependency-property callback.
+        TitleBarRow.Height = ShowTitleBar ? new GridLength(30) : new GridLength(0);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

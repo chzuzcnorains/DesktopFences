@@ -23,8 +23,7 @@
                 Grid.Row="0"
                 Background="#CC1E1E2E"
                 CornerRadius="8,8,0,0"
-                BorderBrush="#55888888"
-                BorderThickness="1,1,1,0"
+                BorderThickness="0"
                 Margin="0,0,0,-1">
             <Grid>
                 <ItemsControl x:Name="TabStrip" Margin="0,0,58,0">

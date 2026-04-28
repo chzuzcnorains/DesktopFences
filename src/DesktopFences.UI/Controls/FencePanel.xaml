@@ -130,11 +130,11 @@
         <!-- When ShowTitleBar=False (tabs visible), remove top corners -->
         <Style x:Key="FenceBorderStyle" TargetType="{x:Type Border}">
             <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ShowTitleBar, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False">
                     <Setter Property="CornerRadius" Value="0,0,10,10"/>
-                    <Setter Property="BorderThickness" Value="1,0,1,1"/>
+                    <Setter Property="BorderThickness" Value="0"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -198,7 +198,7 @@
             </Border.Style>
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="30" />
+                    <RowDefinition x:Name="TitleBarRow" Height="30" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 

@@ -398,16 +398,16 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
     private void TabStripBorder_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 1)
-        {
-            FenceContent.RaiseInteractionStarted();
-            // Use WM_NCLBUTTONDOWN + HTCAPTION instead of DragMove()
-            // so that WM_MOVING messages are generated for real-time snap
-            var helper = new WindowInteropHelper(this);
-            NativeMethods.SendMessage(helper.Handle, NativeMethods.WM_NCLBUTTONDOWN,
-                (IntPtr)NativeMethods.HTCAPTION, IntPtr.Zero);
-            // Position sync is handled by WM_EXITSIZEMOVE → HandleExitSizeMove
-        }
+        // Only drag on single click; double-click is intercepted by WndProc.
+        if (e.ClickCount != 1) return;
+
+        FenceContent.RaiseInteractionStarted();
+        // Use WM_NCLBUTTONDOWN + HTCAPTION instead of DragMove()
+        // so that WM_MOVING messages are generated for real-time snap
+        var helper = new WindowInteropHelper(this);
+        NativeMethods.SendMessage(helper.Handle, NativeMethods.WM_NCLBUTTONDOWN,
+            (IntPtr)NativeMethods.HTCAPTION, IntPtr.Zero);
+        // Position sync is handled by WM_EXITSIZEMOVE → HandleExitSizeMove
     }
 
     // ── Window lifecycle ─────────────────────────────────────
@@ -521,6 +521,26 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
             case NativeMethods.WM_EXITSIZEMOVE:
                 HandleExitSizeMove();
+                break;
+
+            // Prevent double-click on caption area (e.g. after screenshot tool drag)
+            // from triggering SC_MINIMIZE which hides the fence window.
+            case NativeMethods.WM_NCLBUTTONDBLCLK:
+                if (wParam.ToInt32() == NativeMethods.HTCAPTION)
+                {
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+                break;
+
+            // Block SC_MINIMIZE — fence windows must never be minimized;
+            // minimizing a ShowInTaskbar=False / WS_EX_TOOLWINDOW window hides it with no way back.
+            case NativeMethods.WM_SYSCOMMAND:
+                if ((wParam.ToInt32() & 0xFFF0) == NativeMethods.SC_MINIMIZE)
+                {
+                    handled = true;
+                    return IntPtr.Zero;
+                }
                 break;
         }
 

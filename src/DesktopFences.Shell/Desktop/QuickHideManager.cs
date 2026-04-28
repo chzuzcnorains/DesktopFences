@@ -16,6 +16,8 @@ public sealed class QuickHideManager : IDisposable
     private NativeMethods.LowLevelMouseProc? _mouseHookProc;
     private DateTime _lastClickTime = DateTime.MinValue;
     private NativeMethods.POINT _lastClickPoint;
+    private NativeMethods.POINT _pendingDownPoint;
+    private bool _hasPendingDown;
     private bool _disposed;
 
     private const int DoubleClickThresholdMs = 500;
@@ -48,28 +50,60 @@ public sealed class QuickHideManager : IDisposable
 
     private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && (int)wParam == NativeMethods.WM_LBUTTONDOWN)
+        if (nCode >= 0)
         {
-            var ms = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+            var msg = (int)wParam;
 
-            var now = DateTime.UtcNow;
-            var elapsed = (now - _lastClickTime).TotalMilliseconds;
-
-            if (elapsed < DoubleClickThresholdMs &&
-                Math.Abs(ms.pt.X - _lastClickPoint.X) <= DoubleClickDistancePx &&
-                Math.Abs(ms.pt.Y - _lastClickPoint.Y) <= DoubleClickDistancePx)
+            if (msg == NativeMethods.WM_LBUTTONDOWN)
             {
-                // Double-click detected — check if it's on the desktop
-                if (IsDesktopWindow(ms.pt))
+                var ms = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+
+                // Only desktop presses can ever contribute to a quick-hide double-click.
+                // A press on any non-desktop window (snipping tool overlay, fence, app)
+                // must NOT update _lastClickTime — otherwise a screenshot drag-press
+                // followed by a stray desktop click later would be mistaken for a
+                // double-click and hide every fence.
+                if (!IsDesktopWindow(ms.pt))
+                {
+                    _lastClickTime = DateTime.MinValue;
+                    _hasPendingDown = false;
+                    return NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+                }
+
+                _pendingDownPoint = ms.pt;
+                _hasPendingDown = true;
+            }
+            else if (msg == NativeMethods.WM_LBUTTONUP && _hasPendingDown)
+            {
+                var ms = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+                _hasPendingDown = false;
+
+                // Drag (down → moved → up) is not a click. Reject when the up
+                // position drifted from the down position, so screenshot/marquee
+                // drags that begin on the desktop don't seed a click timestamp.
+                if (Math.Abs(ms.pt.X - _pendingDownPoint.X) > DoubleClickDistancePx ||
+                    Math.Abs(ms.pt.Y - _pendingDownPoint.Y) > DoubleClickDistancePx ||
+                    !IsDesktopWindow(ms.pt))
+                {
+                    _lastClickTime = DateTime.MinValue;
+                    return NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+                }
+
+                var now = DateTime.UtcNow;
+                var elapsed = (now - _lastClickTime).TotalMilliseconds;
+
+                if (elapsed < DoubleClickThresholdMs &&
+                    Math.Abs(ms.pt.X - _lastClickPoint.X) <= DoubleClickDistancePx &&
+                    Math.Abs(ms.pt.Y - _lastClickPoint.Y) <= DoubleClickDistancePx)
                 {
                     DesktopDoubleClick?.Invoke();
+                    _lastClickTime = DateTime.MinValue; // reset to avoid triple-click
                 }
-                _lastClickTime = DateTime.MinValue; // reset to avoid triple-click
-            }
-            else
-            {
-                _lastClickTime = now;
-                _lastClickPoint = ms.pt;
+                else
+                {
+                    _lastClickTime = now;
+                    _lastClickPoint = ms.pt;
+                }
             }
         }
 

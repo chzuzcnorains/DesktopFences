@@ -60,6 +60,9 @@ internal static class NativeMethods
     public const int WM_SIZING = 0x0214;
     public const int WM_EXITSIZEMOVE = 0x0232;
     public const int WM_NCLBUTTONDOWN = 0x00A1;
+    public const int WM_NCLBUTTONDBLCLK = 0x00A3;
+    public const int WM_SYSCOMMAND = 0x0112;
+    public const int SC_MINIMIZE = 0xF020;
     public const int HTCAPTION = 0x2;
     public const int VK_PRIOR = 0x21; // PageUp
     public const int VK_NEXT = 0x22;  // PageDown
@@ -113,6 +116,7 @@ internal static class NativeMethods
     public const int WH_MOUSE_LL = 14;
     public const int WM_LBUTTONDBLCLK = 0x0203;
     public const int WM_LBUTTONDOWN = 0x0201;
+    public const int WM_LBUTTONUP = 0x0202;
 
     public delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
