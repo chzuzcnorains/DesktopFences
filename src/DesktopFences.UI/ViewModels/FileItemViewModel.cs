@@ -42,7 +42,17 @@ public class FileItemViewModel : ViewModelBase
     public FileItemViewModel(string filePath)
     {
         _filePath = filePath;
-        _displayName = Path.GetFileName(filePath);
+        _displayName = GetDisplayNameWithoutLnkExtension(filePath);
+    }
+
+    private static string GetDisplayNameWithoutLnkExtension(string filePath)
+    {
+        var fileName = Path.GetFileName(filePath);
+        if (fileName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            return fileName.Substring(0, fileName.Length - 4);
+        }
+        return fileName;
     }
 
     public string FilePath
@@ -52,7 +62,7 @@ public class FileItemViewModel : ViewModelBase
         {
             if (SetProperty(ref _filePath, value))
             {
-                DisplayName = Path.GetFileName(value);
+                DisplayName = GetDisplayNameWithoutLnkExtension(value);
                 OnPropertyChanged(nameof(Extension));
                 OnPropertyChanged(nameof(KindLabel));
                 OnPropertyChanged(nameof(IsDirectory));

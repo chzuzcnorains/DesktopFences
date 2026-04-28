@@ -10,6 +10,7 @@
 | 2 | [截图后Fence面板不展示](screenshot_after_panel_disappear.md) | 使用截图工具截图后，桌面上的Fence面板会消失，需要切换窗口才能重新显示 | 已修复 | 2026-04-28 |
 | 3 | [虚伪边框的bug](fake_border_issue.md) | Fence面板周围有一个多余的透明边框，窗口实际大小比内容大 | 已修复 | 2026-04-28 |
 | 4 | [吸附后面板消失的bug](snap_after_panel_disappear.md) | 拖动Fence窗口进行吸附对齐操作后，窗口会突然消失 | 已修复 | 2026-04-28 |
+| 5 | [启用规则时自动创建缺失的Fence功能异常](rule_target_fence_not_found.md) | 规则被禁用后重新启用，或规则的目标Fence被删除后启用规则时，系统没有自动创建对应的Fence，反而错误绑定到其他Fence | 已修复 | 2026-04-28 |
 
 ## 常见问题说明
 

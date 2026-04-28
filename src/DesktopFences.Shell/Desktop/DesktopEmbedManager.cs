@@ -105,7 +105,7 @@ public sealed class DesktopEmbedManager : IDisposable
 
     /// <summary>
     /// Register a window to be managed. Call after WPF window Loaded event.
-    /// Applies WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE and sends to HWND_BOTTOM.
+    /// Applies WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE and ensures it's visible above desktop.
     /// </summary>
     public void RegisterWindow(IntPtr hwnd)
     {
@@ -115,14 +115,18 @@ public sealed class DesktopEmbedManager : IDisposable
 
         _managedWindows.Add(hwnd);
 
-        // For initial positioning, always safe to use HWND_BOTTOM even if desktop is foreground
-        // because the window hasn't been shown yet and we want it below everything else.
-        // But we'll do it carefully - first show, then position.
+        // 新创建的窗口：直接放置在桌面上方，确保立即可见
+        // 1. 先显示窗口
+        NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
+
+        // 2. 使用 HWND_TOP 确保在最上层（WS_EX_NOACTIVATE 保证不会干扰焦点）
         NativeMethods.SetWindowPos(
-            hwnd, NativeMethods.HWND_BOTTOM,
+            hwnd, NativeMethods.HWND_TOP,
             0, 0, 0, 0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+
+        // 3. 不要立即设置回 HWND_BOTTOM，让用户先看到窗口
+        // z-order 恢复定时器会在稍后处理
     }
 
     public void UnregisterWindow(IntPtr hwnd)

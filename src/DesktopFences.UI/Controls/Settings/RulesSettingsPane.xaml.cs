@@ -111,8 +111,8 @@ public partial class RulesSettingsPane : UserControl
                 break;
             }
         }
-        if (CboTargetFence.SelectedIndex < 0 && CboTargetFence.Items.Count > 0)
-            CboTargetFence.SelectedIndex = 0;
+        // 找不到目标 Fence 时，不要自动选择第一个，保持 TargetFenceId 不变
+        // 这样保存时会自动创建同名的 Fence
 
         UpdatePatternHint();
         _suppressEvents = false;

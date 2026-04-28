@@ -27,20 +27,31 @@
 ## 3. 规则评估流程
 
 ```
-1. FileMonitor 检测到桌面新增文件
+1. FileMonitor 检测到桌面新增文件，或 AutoOrganizeTimer 触发整理
 2. 按 Priority 排序遍历所有 enabled 规则
 3. 第一个匹配的规则决定目标 Fence
 4. 如果无规则匹配 → 文件留在桌面（不移入任何 Fence）
-5. 规则冲突时：最高优先级（数字最小）胜出
+5. 如果有匹配的规则但目标 Fence 不存在 → 自动创建同名 Fence
+6. 规则冲突时：最高优先级（数字最小）胜出
 ```
 
-## 4. 规则持久化
+## 4. 自动创建 Fence 功能
+
+当启用的规则匹配到文件但目标 Fence 不存在时，系统会自动创建 Fence：
+
+- **创建时机**：`OnDesktopFilesAdded` 和 `OrganizeDesktopOnceAsync` 中检测到目标 Fence 缺失时
+- **Fence 名称**：使用规则的名称作为新 Fence 的标题
+- **Fence ID**：使用规则的 `TargetFenceId` 作为新 Fence 的 ID，确保后续规则能正确匹配
+- **位置**：在最后一个 Fence 附近偏移（+50, +50），若无 Fence 则在 (200, 200)
+- **规则关联**：新 Fence 的 `RuleIds` 列表会包含创建它的规则 ID
+
+## 5. 规则持久化
 
 - `ILayoutStore` — 新增 `LoadRulesAsync()` / `SaveRulesAsync()` 接口
 - `JsonLayoutStore` — 新增 `rules.json` 文件读写，原子写入
 - 规则编辑器已合并至 `SettingsWindow` → `RulesSettingsPane`
 
-## 5. 默认分类配置（首次运行）
+## 6. 默认分类配置（首次运行）
 
 首次启动（`fences.json` 不存在）时，`CreateDefaultConfiguration()` 自动创建 6 个 Fence + 6 条规则：
 
@@ -55,7 +66,7 @@
 
 规则 Priority 1-6，Fence 与规则通过 `Id`（Guid）关联。
 
-## 6. 规则变更时重新分类
+## 7. 规则变更时重新分类
 
 `ReEvaluateClassifiedFiles` — 规则保存后触发：
 - 遍历所有 Fence 中的文件重新匹配

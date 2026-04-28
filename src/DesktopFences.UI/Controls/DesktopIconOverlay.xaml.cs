@@ -39,11 +39,11 @@ public partial class DesktopIconOverlay : Window
     private Border? _movingIcon;  // the icon being moved
     private Point _moveOffset;    // offset from icon top-left to mouse
 
-    // Auto-position grid settings
-    private const double GridCellWidth = 80;
-    private const double GridCellHeight = 96;
-    private const double GridMarginLeft = 12;
-    private const double GridMarginTop = 12;
+    // Auto-position grid settings (match Windows native desktop icon size/spacing)
+    private const double GridCellWidth = 90;
+    private const double GridCellHeight = 90;
+    private const double GridMarginLeft = 10;
+    private const double GridMarginTop = 10;
 
     /// <summary>Fired when a file is dragged off the overlay into a fence.</summary>
     public event Action<string>? FileDraggedToFence;
@@ -165,11 +165,17 @@ public partial class DesktopIconOverlay : Window
         var icon = _iconExtractor.GetIcon(filePath);
         var displayName = Path.GetFileName(filePath);
 
+        // Hide .lnk extension by default
+        if (displayName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            displayName = displayName.Substring(0, displayName.Length - 4);
+        }
+
         var image = new Image
         {
             Source = icon,
-            Width = 32,
-            Height = 32,
+            Width = 48,
+            Height = 48,
             HorizontalAlignment = HorizontalAlignment.Center
         };
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
@@ -177,13 +183,13 @@ public partial class DesktopIconOverlay : Window
         var text = new TextBlock
         {
             Text = displayName,
-            FontSize = 11,
+            FontSize = 12,
             Foreground = Brushes.White,
             TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 32,
+            MaxHeight = 36,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 0, 0),
+            Margin = new Thickness(0, 4, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
             Effect = new DropShadowEffect
             {
@@ -205,8 +211,8 @@ public partial class DesktopIconOverlay : Window
 
         var border = new Border
         {
-            Width = 72,
-            Height = 80,
+            Width = 86,
+            Height = 90,
             CornerRadius = new CornerRadius(4),
             Background = Brushes.Transparent,
             Child = stack,

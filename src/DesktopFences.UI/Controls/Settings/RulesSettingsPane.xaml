@@ -125,12 +125,16 @@
                     <TextBlock Text="目标 Fence" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                     <ComboBox x:Name="CboTargetFence" Grid.Column="1"
                               Style="{DynamicResource DarkComboBoxStyle}"
+                              DisplayMemberPath="Title"
                               SelectionChanged="RuleFieldChanged">
                         <ComboBox.ItemContainerStyle>
                             <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
                         </ComboBox.ItemContainerStyle>
                     </ComboBox>
                 </Grid>
+                <TextBlock Text="提示：如果启用的规则匹配了文件但目标 Fence 不存在，系统会自动创建一个同名的 Fence。"
+                           Foreground="{DynamicResource TextFaintBrush}" FontSize="11"
+                           Margin="0,0,0,8" TextWrapping="Wrap" />
             </StackPanel>
         </Grid>
     </Grid>
