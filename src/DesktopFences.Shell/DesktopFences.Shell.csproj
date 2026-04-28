@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="DesktopFences.UI" />
+    <InternalsVisibleTo Include="DesktopFences.App" />
     <ProjectReference Include="..\DesktopFences.Core\DesktopFences.Core.csproj" />
   </ItemGroup>
 

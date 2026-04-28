@@ -8,7 +8,7 @@
 - [x] 文件拖入"吸入"动画（ScaleTransform 1.0→1.02→1.0，150ms drop pulse）
 - [x] 分页切换滑动动画（DoubleAnimation，300ms QuadraticEase，Phase 5 已实现）
 - [x] Rollup 展开/折叠高度动画（DoubleAnimation，Phase 4 已实现）
-- [ ] Snap 吸附磁性效果（视觉反馈，延迟到后续优化）
+- [x] Snap 吸附磁性效果（视觉反馈，WM_MOVING 实时吸附 + SnapGuideOverlay 辅助线 + Alt 禁用 + Resize 吸附）
 
 ## 6.2 主题与外观
 - [x] Fence 背景颜色自定义（每个 Fence 独立，`FenceDefinition.BackgroundColor`）
@@ -48,8 +48,8 @@
   - `SelfContained=true`，`PublishSingleFile=true`，`PublishReadyToRun=true`
   - `EnableCompressionInSingleFile=true`，`TrimMode=partial`
 - [x] `StartupManager` — `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` 注册开机自启
-- [ ] MSIX / Inno Setup 安装包（延迟到后续需要时）
-- [ ] 自动更新检查（延迟到后续需要时）
+- [x] Inno Setup 安装包（`tools/installer/DesktopFences.iss` + `build-installer.ps1`）
+- [ ] 自动更新检查（延迟到后续需要时，需 GitHub 仓库地址）
 
 **验收标准**：完整功能可用，动画流畅，设置可调，安装包可分发。 ✅ 已通过（61 个单元测试全部通过）
 
@@ -123,3 +123,52 @@ dotnet publish src/DesktopFences.App -c Release /p:PublishProfile=win-x64-self-c
 - 写入 `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\DesktopFences`
 - 值为 `"<exePath>"` 带引号，处理路径含空格情况
 - `SetEnabled(bool)` 统一接口，由 `SettingsSaved` 事件驱动
+
+### Snap 吸附视觉反馈
+
+**核心改动**：将 `DragMove()` 替换为 Win32 `WM_NCLBUTTONDOWN + HTCAPTION`，通过 `HwndSourceHook` 拦截 `WM_MOVING` 实现实时吸附。
+
+**SnapEngine 扩展**（`SnapEngine.cs`）：
+- `SnapWithDetail()` — 与 `Snap()` 相同逻辑，额外返回 `SnapLine` 列表（位置 + 方向）
+- `SnapResize()` — Resize 吸附，当前逻辑与 `SnapWithDetail` 相同
+- `SnapLine` / `SnapDetailResult` / `SnapEdge` — 新增类型
+
+**SnapGuideOverlay**（`SnapGuideOverlay.xaml` + `.cs`）：
+- 透明无边框窗口，`WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 不拦截鼠标
+- Canvas 动态绘制辅助线（AccentColor #7AA7E6，1px 虚线）
+- 覆盖整个虚拟屏幕，全局共享一个实例
+
+**FenceHost 消息拦截**（`FenceHost.xaml.cs`）：
+- `WndProc` HwndSourceHook 拦截 `WM_MOVING` / `WM_SIZING` / `WM_EXITSIZEMOVE`
+- `HandleMoving()` — 从 lParam 解析 RECT → SnapWithDetail → 写回修正位置 → 显示辅助线
+- `HandleSizing()` — 同理，调用 `SnapResize`
+- `HandleExitSizeMove()` — 隐藏辅助线 → 触发 `InteractionEndedFromWndProc`
+- `GetOtherFenceRects` 委托由 App.xaml.cs 注入
+- Alt 键检测（`GetAsyncKeyState(VK_MENU)`）临时禁用吸附
+
+**FencePanel 拖拽改造**（`FencePanel.xaml.cs`）：
+- `TitleBar_MouseLeftButtonDown` — 替换 `DragMove()` 为 `SendMessage(WM_NCLBUTTONDOWN, HTCAPTION)`
+- `TabStripBorder_MouseLeftButtonDown` — 同上（FenceHost 中）
+- Resize 吸附 — 每个 `ResizeFrom*` 方法末尾调用 `ApplyResizeSnap()`
+- `Grip_DragCompleted` — 隐藏辅助线
+
+**NativeMethods 扩展**（`NativeMethods.cs`）：
+- `WM_MOVING`, `WM_SIZING`, `WM_EXITSIZEMOVE`, `WM_NCLBUTTONDOWN`, `HTCAPTION`, `VK_MENU`, `WS_EX_TRANSPARENT`
+
+**Shell 项目 InternalsVisibleTo**：
+- `DesktopFences.UI` / `DesktopFences.App` — 允许访问 `internal` 的 `NativeMethods`
+
+### Inno Setup 安装包
+
+**安装脚本**（`tools/installer/DesktopFences.iss`）：
+- 版本号通过 ISCC 命令行 `/DMyAppVersion=x.y.z` 传入
+- 安装目录：`{autopf}\DesktopFences`
+- 文件来源：dotnet publish 输出（`bin\Publish\win-x64\*`）
+- 开始菜单快捷方式 + 可选桌面快捷方式
+- 可选"开机自启"（写注册表 `HKCU\...\Run`）
+- 卸载时可选删除 `%APPDATA%\DesktopFences` 用户数据
+
+**构建脚本**（`tools/installer/build-installer.ps1`）：
+- 从 `Directory.Build.props` 提取版本号
+- 执行 `dotnet publish` + ISCC 编译
+- 输出到 `artifacts/installer/DesktopFences-Setup-{version}.exe`

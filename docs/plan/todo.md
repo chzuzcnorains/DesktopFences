@@ -1,16 +1,12 @@
 # 待完成功能（分散在各 Phase 中）
 
 ### Phase 6 待完成
-- [ ] Snap 吸附磁性效果（视觉反馈）
-- [ ] MSIX / Inno Setup 安装包
-- [ ] 自动更新检查
+- [x] Snap 吸附磁性效果（视觉反馈）✅ WM_MOVING 实时吸附 + SnapGuideOverlay 辅助线 + Alt 禁用 + Resize 吸附
+- [x] Inno Setup 安装包 ✅ `tools/installer/DesktopFences.iss` + `build-installer.ps1`
+- [ ] 自动更新检查（需 GitHub 仓库地址）
 
 ### Phase 8 待完成
 - [ ] DWM 背景模糊
-
-### Phase 10 待完成
-- [ ] 批次 10：Hue/Opacity/Blur 接入真实 FencePanel；Fence 关闭流程写入 `RecentClosedFences` FIFO（≤20）+ Toast 提示 + 托盘菜单"恢复最近关闭"子菜单
-- [ ] 批次 11：导入 / 导出布局；文档收尾（README + 截图 + DESIGN 收口）
 
 ## 已移除项（功能已被替代或无需实现）
 

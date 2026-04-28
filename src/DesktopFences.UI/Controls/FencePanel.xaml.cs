@@ -5,7 +5,9 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using DesktopFences.Core.Services;
 using DesktopFences.Shell.Desktop;
+using DesktopFences.Shell.Interop;
 using DesktopFences.UI.ViewModels;
 
 namespace DesktopFences.UI.Controls;
@@ -38,6 +40,17 @@ public partial class FencePanel : UserControl
     /// <summary>Allow FenceHost to raise InteractionStarted (e.g. tab strip drag).</summary>
     public void RaiseInteractionStarted() => InteractionStarted?.Invoke();
     public ShellIconExtractor? IconExtractor { get; set; }
+
+    // ── Snap support for resize ──────────────────────────────
+
+    /// <summary>Injected delegate returning other fence rects for snap calculation.</summary>
+    public Func<IReadOnlyList<SnapEngine.Rect>>? GetOtherFenceRects { get; set; }
+
+    /// <summary>Snap threshold from AppSettings (0 = disabled).</summary>
+    public double SnapThreshold { get; set; } = SnapEngine.DefaultThreshold;
+
+    /// <summary>Shared snap guide overlay for displaying guide lines during resize.</summary>
+    public SnapGuideOverlay? SnapOverlay { get; set; }
 
     /// <summary>
     /// Fired when rollup state changes. Host should sync window height.
@@ -329,9 +342,15 @@ public partial class FencePanel : UserControl
         {
             InteractionStarted?.Invoke();
             var hostWindow = Window.GetWindow(this);
-            hostWindow?.DragMove();
-            SyncPositionFromWindow();
-            InteractionEnded?.Invoke();
+            if (hostWindow is not null)
+            {
+                // Use WM_NCLBUTTONDOWN + HTCAPTION instead of DragMove()
+                // so that WM_MOVING messages are generated for real-time snap
+                var helper = new WindowInteropHelper(hostWindow);
+                NativeMethods.SendMessage(helper.Handle, NativeMethods.WM_NCLBUTTONDOWN,
+                    (IntPtr)NativeMethods.HTCAPTION, IntPtr.Zero);
+            }
+            // Position sync is handled by WM_EXITSIZEMOVE → FenceHost.HandleExitSizeMove
         }
     }
 
@@ -358,6 +377,7 @@ public partial class FencePanel : UserControl
 
     private void Grip_DragCompleted(object sender, DragCompletedEventArgs e)
     {
+        SnapOverlay?.Hide();
         InteractionStarted?.Invoke();
         InteractionEnded?.Invoke();
     }
@@ -396,6 +416,7 @@ public partial class FencePanel : UserControl
         win.Height = newHeight;
         ViewModel.Y = win.Top;
         ViewModel.Height = newHeight;
+        ApplyResizeSnap(win);
     }
 
     private void ResizeFromBottom(double delta)
@@ -406,6 +427,7 @@ public partial class FencePanel : UserControl
         if (newHeight < FencePanelViewModel.MinHeight) return;
         win.Height = newHeight;
         ViewModel.Height = newHeight;
+        ApplyResizeSnap(win);
     }
 
     private void ResizeFromLeft(double delta)
@@ -418,6 +440,7 @@ public partial class FencePanel : UserControl
         win.Width = newWidth;
         ViewModel.X = win.Left;
         ViewModel.Width = newWidth;
+        ApplyResizeSnap(win);
     }
 
     private void ResizeFromRight(double delta)
@@ -428,6 +451,41 @@ public partial class FencePanel : UserControl
         if (newWidth < FencePanelViewModel.MinWidth) return;
         win.Width = newWidth;
         ViewModel.Width = newWidth;
+        ApplyResizeSnap(win);
+    }
+
+    /// <summary>
+    /// After a resize delta is applied, check snap targets and correct
+    /// the window position/size accordingly.
+    /// </summary>
+    private void ApplyResizeSnap(Window win)
+    {
+        if (SnapThreshold <= 0 || GetOtherFenceRects is null || ViewModel is null) return;
+
+        var movingRect = new SnapEngine.Rect(win.Left, win.Top, win.Width, win.Height);
+        var others = GetOtherFenceRects();
+
+        var screen = System.Windows.Forms.Screen.FromPoint(
+            new System.Drawing.Point((int)win.Left, (int)win.Top));
+        var workArea = screen.WorkingArea;
+        var screenRect = new SnapEngine.Rect(workArea.X, workArea.Y, workArea.Width, workArea.Height);
+
+        var result = SnapEngine.SnapResize(movingRect, others, screenRect, SnapThreshold);
+
+        if (result.X != win.Left || result.Y != win.Top ||
+            result.Width != win.Width || result.Height != win.Height)
+        {
+            win.Left = result.X;
+            win.Top = result.Y;
+            win.Width = result.Width;
+            win.Height = result.Height;
+            ViewModel.X = result.X;
+            ViewModel.Y = result.Y;
+            ViewModel.Width = result.Width;
+            ViewModel.Height = result.Height;
+        }
+
+        SnapOverlay?.ShowLines(result.Lines);
     }
 
     // ── Drag-drop from Explorer ──────────────────────────────

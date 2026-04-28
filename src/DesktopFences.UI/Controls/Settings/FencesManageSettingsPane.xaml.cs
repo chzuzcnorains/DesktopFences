@@ -334,6 +334,10 @@ public partial class FencesManageSettingsPane : UserControl
 
     private void SegActive_Checked(object sender, RoutedEventArgs e)
     {
+        // BAML 加载阶段 IsChecked="True" 会触发 Checked，但后续 x:Name 字段尚未注入；
+        // XAML 默认就保持 ActiveSection 可见 / ClosedSection 折叠，跳过即可。
+        if (!IsInitialized) return;
+
         SegClosed.IsChecked = false;
         ActiveSection.Visibility = Visibility.Visible;
         ClosedSection.Visibility = Visibility.Collapsed;
@@ -341,6 +345,8 @@ public partial class FencesManageSettingsPane : UserControl
 
     private void SegClosed_Checked(object sender, RoutedEventArgs e)
     {
+        if (!IsInitialized) return;
+
         SegActive.IsChecked = false;
         ActiveSection.Visibility = Visibility.Collapsed;
         ClosedSection.Visibility = Visibility.Visible;

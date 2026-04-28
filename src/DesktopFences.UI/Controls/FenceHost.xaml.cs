@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,7 +7,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using DesktopFences.Core.Models;
+using DesktopFences.Core.Services;
 using DesktopFences.Shell.Desktop;
+using DesktopFences.Shell.Interop;
 using DesktopFences.UI.ViewModels;
 
 namespace DesktopFences.UI.Controls;
@@ -19,13 +22,32 @@ public partial class FenceHost : Window
     private int _activeTabIndex;
     private bool _isClosing;
     private TabStyle _tabStyle = TabStyle.Flat;
-
+    private bool _isMovingOrSizing;
+    private SnapGuideOverlay? _snapGuideOverlay;
 
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
     /// so the Closed handler skips page/portal cleanup for tabs that moved elsewhere.
     /// </summary>
     public bool IsMerging { get; set; }
+
+    /// <summary>
+    /// Set to true before closing this host because the layout is being replaced
+    /// (snapshot restore, monitor reconfig, reset). Page/portal cleanup still runs;
+    /// only the "recently closed" recording is suppressed.
+    /// </summary>
+    public bool IsBeingReplaced { get; set; }
+
+    /// <summary>
+    /// Injected delegate that returns the bounding rects of all other fences
+    /// (used for snap calculations during drag/resize).
+    /// </summary>
+    public Func<IReadOnlyList<SnapEngine.Rect>>? GetOtherFenceRects { get; set; }
+
+    /// <summary>
+    /// Injected snap threshold from AppSettings.
+    /// </summary>
+    public double SnapThreshold { get; set; } = SnapEngine.DefaultThreshold;
 
     /// <summary>
     /// Raised when the user right-clicks a tab and selects "Detach".
@@ -379,8 +401,12 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         if (e.ClickCount == 1)
         {
             FenceContent.RaiseInteractionStarted();
-            DragMove();
-            OnInteractionEnded();
+            // Use WM_NCLBUTTONDOWN + HTCAPTION instead of DragMove()
+            // so that WM_MOVING messages are generated for real-time snap
+            var helper = new WindowInteropHelper(this);
+            NativeMethods.SendMessage(helper.Handle, NativeMethods.WM_NCLBUTTONDOWN,
+                (IntPtr)NativeMethods.HTCAPTION, IntPtr.Zero);
+            // Position sync is handled by WM_EXITSIZEMOVE → HandleExitSizeMove
         }
     }
 
@@ -390,6 +416,10 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     {
         var helper = new WindowInteropHelper(this);
         _embedManager.RegisterWindow(helper.Handle);
+
+        // Hook WM_MOVING / WM_SIZING / WM_EXITSIZEMOVE for real-time snap
+        var hwndSource = HwndSource.FromHwnd(helper.Handle);
+        hwndSource?.AddHook(WndProc);
 
         // Fade-in animation on create
         FenceContent.AnimateFadeIn();
@@ -463,5 +493,137 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
         FenceContent.HoverCollapse();
+    }
+
+    // ── Snap guide overlay ──────────────────────────────────
+
+    /// <summary>
+    /// Set the shared snap guide overlay (created and owned by App).
+    /// </summary>
+    public void SetSnapGuideOverlay(SnapGuideOverlay overlay)
+    {
+        _snapGuideOverlay = overlay;
+    }
+
+    // ── WndProc for WM_MOVING / WM_SIZING / WM_EXITSIZEMOVE ───
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        switch (msg)
+        {
+            case NativeMethods.WM_MOVING:
+                HandleMoving(lParam);
+                break;
+
+            case NativeMethods.WM_SIZING:
+                HandleSizing(lParam);
+                break;
+
+            case NativeMethods.WM_EXITSIZEMOVE:
+                HandleExitSizeMove();
+                break;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void HandleMoving(IntPtr lParam)
+    {
+        // Always mark interaction so HandleExitSizeMove can sync ViewModel and
+        // fire InteractionEndedFromWndProc, even when snap is disabled or Alt is held.
+        _isMovingOrSizing = true;
+
+        if (SnapThreshold <= 0) return;
+
+        // Alt key disables snap
+        if ((NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) != 0)
+        {
+            _snapGuideOverlay?.Hide();
+            return;
+        }
+
+        var rect = Marshal.PtrToStructure<NativeMethods.RECT>(lParam);
+        var movingRect = ToSnapRect(rect);
+
+        var others = GetOtherFenceRects?.Invoke() ?? [];
+
+        var screen = System.Windows.Forms.Screen.FromHandle(
+            new WindowInteropHelper(this).Handle);
+        var workArea = screen.WorkingArea;
+        var screenRect = new SnapEngine.Rect(workArea.X, workArea.Y, workArea.Width, workArea.Height);
+
+        var result = SnapEngine.SnapWithDetail(movingRect, others, screenRect, SnapThreshold);
+
+        // Write corrected position back
+        var corrected = new NativeMethods.RECT
+        {
+            Left = (int)result.X,
+            Top = (int)result.Y,
+            Right = (int)(result.X + result.Width),
+            Bottom = (int)(result.Y + result.Height)
+        };
+        Marshal.StructureToPtr(corrected, lParam, false);
+
+        _snapGuideOverlay?.ShowLines(result.Lines);
+    }
+
+    private void HandleSizing(IntPtr lParam)
+    {
+        _isMovingOrSizing = true;
+
+        if (SnapThreshold <= 0) return;
+
+        if ((NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) != 0)
+        {
+            _snapGuideOverlay?.Hide();
+            return;
+        }
+
+        var rect = Marshal.PtrToStructure<NativeMethods.RECT>(lParam);
+        var movingRect = ToSnapRect(rect);
+
+        var others = GetOtherFenceRects?.Invoke() ?? [];
+
+        var screen = System.Windows.Forms.Screen.FromHandle(
+            new WindowInteropHelper(this).Handle);
+        var workArea = screen.WorkingArea;
+        var screenRect = new SnapEngine.Rect(workArea.X, workArea.Y, workArea.Width, workArea.Height);
+
+        var result = SnapEngine.SnapResize(movingRect, others, screenRect, SnapThreshold);
+
+        var corrected = new NativeMethods.RECT
+        {
+            Left = (int)result.X,
+            Top = (int)result.Y,
+            Right = (int)(result.X + result.Width),
+            Bottom = (int)(result.Y + result.Height)
+        };
+        Marshal.StructureToPtr(corrected, lParam, false);
+
+        _snapGuideOverlay?.ShowLines(result.Lines);
+    }
+
+    private void HandleExitSizeMove()
+    {
+        _snapGuideOverlay?.Hide();
+
+        if (_isMovingOrSizing)
+        {
+            _isMovingOrSizing = false;
+            OnInteractionEnded();
+            InteractionEndedFromWndProc?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Fired when a drag/resize completes via WM_EXITSIZEMOVE.
+    /// Used by App.xaml.cs to trigger post-snap and merge logic.
+    /// </summary>
+    public event Action? InteractionEndedFromWndProc;
+
+    private static SnapEngine.Rect ToSnapRect(NativeMethods.RECT rect)
+    {
+        return new SnapEngine.Rect(rect.Left, rect.Top,
+            rect.Right - rect.Left, rect.Bottom - rect.Top);
     }
 }

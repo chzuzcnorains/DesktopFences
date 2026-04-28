@@ -179,6 +179,10 @@ public partial class AppearanceSettingsPane : UserControl
 
     private void OnControlChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        // XAML 解析阶段，Slider 的 Min/Max 设置会触发 Value 协调并触发 ValueChanged，
+        // 但此时后续 x:Name 字段（如 BlurValueLabel）尚未注入。等到 EndInit 才能安全访问。
+        if (!IsInitialized) return;
+
         RefreshValueLabels();
         if (_suppressEvents) return;
         Preview.Apply(BuildSnapshot());

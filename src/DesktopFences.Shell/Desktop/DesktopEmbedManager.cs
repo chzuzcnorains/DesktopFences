@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Threading;
 using DesktopFences.Shell.Interop;
 
@@ -11,7 +12,12 @@ namespace DesktopFences.Shell.Desktop;
 /// Z-order strategy:
 ///   Normal:  HWND_BOTTOM — window sits at bottom of z-order, above desktop, below all apps
 ///   Win+D:   HWND_TOPMOST (temporary) — survives ShowDesktop
-///   After:   When user activates any other window → back to HWND_BOTTOM
+///   Drag:    HWND_TOP during drag — suppress foreground recovery — restore after drag ends
+///   After:   When user activates a real (non-desktop) window → back to HWND_BOTTOM
+///
+/// Critical: HWND_BOTTOM can push windows behind the desktop when the desktop
+/// (Progman/WorkerW) is the foreground window. All SendToBottom calls must be
+/// guarded with a desktop-foreground check to avoid this.
 /// </summary>
 public sealed class DesktopEmbedManager : IDisposable
 {
@@ -24,9 +30,11 @@ public sealed class DesktopEmbedManager : IDisposable
     private bool _isPeekActive;
     private bool _pendingTopmost;   // true while 300ms timer is in-flight
     private bool _winKeyDown;
+    private bool _isDragging;       // true during drag — suppress foreground z-order recovery
     private System.Timers.Timer? _showDesktopTimer;
     private System.Timers.Timer? _zOrderRecoveryTimer;
     private DispatcherTimer? _foregroundDebounceTimer;
+    private bool _foregroundDebounceHandlerAttached;
     private Dispatcher? _dispatcher;
     private bool _disposed;
 
@@ -79,11 +87,16 @@ public sealed class DesktopEmbedManager : IDisposable
             // Dispatch to UI thread to avoid cross-thread SetWindowPos races
             _dispatcher?.BeginInvoke(() =>
             {
-                // Only re-apply bottom z-order when not in topmost/peek mode
-                if (!_isTopmost && !_isPeekActive && _managedWindows.Count > 0)
+                // Only re-apply bottom z-order when not in topmost/peek/drag mode
+                if (!_isTopmost && !_isPeekActive && !_isDragging && _managedWindows.Count > 0)
                 {
-                    foreach (var hwnd in _managedWindows)
-                        SendToBottom(hwnd);
+                    // Skip recovery when desktop is foreground — calling HWND_BOTTOM
+                    // in this state can push windows behind the desktop on Windows 11.
+                    if (!IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+                    {
+                        foreach (var hwnd in _managedWindows)
+                            SendToBottom(hwnd);
+                    }
                 }
             });
         };
@@ -112,11 +125,13 @@ public sealed class DesktopEmbedManager : IDisposable
     }
 
     /// <summary>
-    /// Temporarily bring a single window above all other managed windows (for drag operations).
-    /// Places it just above other fence windows without making it truly topmost.
+    /// Temporarily bring a single window above other managed windows (for drag operations).
+    /// Sets _isDragging to suppress foreground-change z-order recovery during drag.
     /// </summary>
     public void BringWindowAboveSiblings(IntPtr hwnd)
     {
+        _isDragging = true;
+
         // Place above other HWND_BOTTOM windows by using HWND_TOP briefly
         // — still below normal app windows since WS_EX_NOACTIVATE is set
         NativeMethods.SetWindowPos(
@@ -128,9 +143,21 @@ public sealed class DesktopEmbedManager : IDisposable
 
     /// <summary>
     /// Restore a window back to HWND_BOTTOM after a drag operation.
+    /// Clears _isDragging flag so foreground recovery can resume.
+    /// When the desktop is foreground, defers SendToBottom to avoid pushing
+    /// windows behind the desktop (Windows 11 z-order quirk).
     /// </summary>
     public void RestoreWindowToBottom(IntPtr hwnd)
     {
+        _isDragging = false;
+
+        // After drag, the desktop is likely foreground. Calling HWND_BOTTOM
+        // in this state can push our window behind the desktop. Defer the
+        // z-order correction to the recovery timer (fires in ≤5 seconds)
+        // or the next foreground change to a non-desktop window.
+        if (IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+            return;
+
         SendToBottom(hwnd);
     }
 
@@ -184,7 +211,6 @@ public sealed class DesktopEmbedManager : IDisposable
             // Timer was in-flight → user pressed Win+D again before it fired.
             // This means Explorer toggled back (restore windows), so cancel the topmost transition.
             _pendingTopmost = false;
-            // Ensure windows are in a consistent bottom state
             SetAllBottom();
             StatusChanged?.Invoke("BOTTOM (Win+D cancelled)");
             return;
@@ -210,9 +236,10 @@ public sealed class DesktopEmbedManager : IDisposable
 
     /// <summary>
     /// Called when any window becomes the foreground window.
-    /// If we're in topmost mode and user activates a non-fence window, restore to bottom.
-    /// When in normal mode, debounce z-order recovery to avoid rapid SendToBottom calls
-    /// during transient system UI interactions (e.g. tray notification area popups).
+    /// - During drag: suppress all z-order changes to prevent panels disappearing.
+    /// - During Win+D topmost: only dismiss when a real app activates (not desktop).
+    /// - Normal mode: skip if desktop is foreground (no recovery needed; SendToBottom
+    ///   when desktop is foreground can push windows behind the desktop).
     /// </summary>
     private void OnForegroundChanged(
         IntPtr hWinEventHook, uint eventType, IntPtr hwnd,
@@ -224,36 +251,67 @@ public sealed class DesktopEmbedManager : IDisposable
         // Don't interfere while Win+D topmost transition is pending
         if (_pendingTopmost) return;
 
+        // Don't interfere during drag — prevents panels disappearing while snapping
+        if (_isDragging) return;
+
         // If the activated window is one of our managed windows, ignore
         if (_managedWindows.Contains(hwnd)) return;
 
         if (_isTopmost)
         {
-            // User activated a real window → fences go back to bottom
+            // If the new foreground is a desktop window (Progman/WorkerW), DON'T dismiss —
+            // being visible on top of the desktop is the intended state after Win+D.
+            if (IsDesktopWindow(hwnd))
+                return;
+
+            // A real application window activated → fences go back to bottom
             SetAllBottom();
             StatusChanged?.Invoke("BOTTOM (behind other windows)");
         }
         else
         {
+            // If the foreground is a desktop window, our windows at HWND_BOTTOM are already
+            // correctly positioned above it — no recovery needed. Calling SendToBottom when
+            // the desktop is foreground can push our windows behind the desktop on Windows 11.
+            if (IsDesktopWindow(hwnd))
+                return;
+
             // Debounce z-order recovery: wait 200ms to coalesce rapid foreground changes
-            // (e.g. clicking tray icon arrow triggers multiple foreground events).
-            // This prevents aggressive HWND_BOTTOM calls that can send fences behind desktop.
-            _foregroundDebounceTimer?.Stop();
-            _foregroundDebounceTimer ??= new DispatcherTimer(DispatcherPriority.Normal, _dispatcher ?? Dispatcher.CurrentDispatcher)
+            StartForegroundDebounce();
+        }
+    }
+
+    private void StartForegroundDebounce()
+    {
+        if (_foregroundDebounceTimer is null)
+        {
+            _foregroundDebounceTimer = new DispatcherTimer(DispatcherPriority.Normal,
+                _dispatcher ?? Dispatcher.CurrentDispatcher)
             {
                 Interval = TimeSpan.FromMilliseconds(200)
             };
-            _foregroundDebounceTimer.Tick += OnDebouncedForegroundRecovery;
-            _foregroundDebounceTimer.Start();
         }
+
+        if (!_foregroundDebounceHandlerAttached)
+        {
+            _foregroundDebounceTimer.Tick += OnDebouncedForegroundRecovery;
+            _foregroundDebounceHandlerAttached = true;
+        }
+
+        _foregroundDebounceTimer.Stop();
+        _foregroundDebounceTimer.Start();
     }
 
     private void OnDebouncedForegroundRecovery(object? sender, EventArgs e)
     {
         _foregroundDebounceTimer?.Stop();
-        _foregroundDebounceTimer!.Tick -= OnDebouncedForegroundRecovery;
 
-        if (_isTopmost || _isPeekActive || _pendingTopmost) return;
+        if (_isTopmost || _isPeekActive || _pendingTopmost || _isDragging) return;
+
+        // Skip recovery when desktop is foreground — calling HWND_BOTTOM
+        // in this state can push windows behind the desktop on Windows 11.
+        if (IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+            return;
 
         foreach (var w in _managedWindows)
             SendToBottom(w);
@@ -310,6 +368,37 @@ public sealed class DesktopEmbedManager : IDisposable
             0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+    }
+
+    /// <summary>
+    /// Check if a window handle belongs to the desktop (Progman or WorkerW).
+    /// Used to prevent Win+D TOPMOST dismissal and HWND_BOTTOM calls when
+    /// the desktop is foreground (which can push fence windows behind the desktop).
+    /// </summary>
+    private static bool IsDesktopWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+
+        var sb = new StringBuilder(256);
+        NativeMethods.GetClassName(hwnd, sb, sb.Capacity);
+        var className = sb.ToString();
+
+        if (className is "Progman" or "WorkerW" or "SHELLDLL_DefView" or "SysListView32")
+            return true;
+
+        // Check parent chain
+        var parent = NativeMethods.GetParent(hwnd);
+        while (parent != IntPtr.Zero)
+        {
+            sb.Clear();
+            NativeMethods.GetClassName(parent, sb, sb.Capacity);
+            var parentClass = sb.ToString();
+            if (parentClass is "Progman" or "WorkerW" or "SHELLDLL_DefView")
+                return true;
+            parent = NativeMethods.GetParent(parent);
+        }
+
+        return false;
     }
 
     public bool IsTopmost => _isTopmost;

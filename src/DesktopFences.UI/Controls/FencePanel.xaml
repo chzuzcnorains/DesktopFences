@@ -186,7 +186,7 @@
                 Background="{DynamicResource FenceBackgroundBrush}"
                 BorderBrush="{DynamicResource FenceBorderBrush}"
                 Opacity="{Binding FenceOpacity, FallbackValue=1.0}"
-                Effect="{StaticResource FenceShadowEffect}">
+                Effect="{DynamicResource FenceShadowEffect}">
             <Border.Style>
                 <Style TargetType="{x:Type Border}" BasedOn="{StaticResource FenceBorderStyle}">
                     <Style.Triggers>

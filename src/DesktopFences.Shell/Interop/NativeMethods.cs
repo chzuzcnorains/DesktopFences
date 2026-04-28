@@ -8,6 +8,7 @@ internal static class NativeMethods
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_NOACTIVATE = 0x08000000;
+    public const int WS_EX_TRANSPARENT = 0x00000020;
 
     // --- SetWindowPos flags ---
     public static readonly IntPtr HWND_TOP = new(0);
@@ -46,12 +47,20 @@ internal static class NativeMethods
     public const int VK_D = 0x44;
     public const int VK_SPACE = 0x20;
     public const int VK_ESCAPE = 0x1B;
+    public const int VK_MENU = 0x12; // Alt key
 
     // --- Hotkey registration ---
     public const uint MOD_WIN = 0x0008;
     public const uint MOD_CONTROL = 0x0002;
     public const uint MOD_NOREPEAT = 0x4000;
     public const int WM_HOTKEY = 0x0312;
+
+    // --- Window move/size messages ---
+    public const int WM_MOVING = 0x0216;
+    public const int WM_SIZING = 0x0214;
+    public const int WM_EXITSIZEMOVE = 0x0232;
+    public const int WM_NCLBUTTONDOWN = 0x00A1;
+    public const int HTCAPTION = 0x2;
     public const int VK_PRIOR = 0x21; // PageUp
     public const int VK_NEXT = 0x22;  // PageDown
 

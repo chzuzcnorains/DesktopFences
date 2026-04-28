@@ -14,4 +14,4 @@
 - [Phase 9a: 应用程序图标](phase-9a.md) ✅
 - [Phase 9b: DarkTheme 深化](phase-9b.md) ✅
 - [Phase 9c: 图标系统](phase-9c.md) ✅
-- [Phase 10: 视觉系统升级](phase-10.md) 
+- [Phase 10: 视觉系统升级](phase-10.md) ✅

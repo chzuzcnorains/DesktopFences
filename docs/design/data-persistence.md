@@ -82,3 +82,48 @@ public double FenceOpacity { get; set; } = 0.85
 public int FenceBlurRadius { get; set; } = 26
 public List<string> RecentClosedFences { get; set; } = new()
 ```
+
+## 4. RecentClosedFences FIFO
+
+**用途**：用户关闭 Fence 后保留可恢复入口，避免误关。
+
+**结构**：`AppSettings.RecentClosedFences` 是 `List<string>`，每条为单个 `FenceDefinition` 的 JSON 序列化串。
+
+**写入规则**（`App.RecordRecentlyClosedFences`）：
+- 触发条件：`host.Closed` 满足 `!IsMerging && !IsBeingReplaced && !_isShuttingDown`。
+- Tab 组内每个 Tab 单独入栈，前插（最新在 index 0），上限 20，超出从尾部丢弃。
+- 写入后 `SaveSettingsAsync` 持久化，托盘 `ShowBalloonTip` 提示，重建托盘菜单。
+
+**关闭语义区分**：
+- `FenceHost.IsMerging` — 合并到其他 host，跳过 page/portal 清理与 FIFO 写入。
+- `FenceHost.IsBeingReplaced` — 快照恢复 / 显示器重配 / 重置布局触发的批量关闭，正常清理但不入 FIFO。
+- `App._isShuttingDown` — 退出菜单 / OnExit 全程进入此态，整波关闭都跳过 FIFO 写入。
+
+**恢复**（`App.RestoreClosedFenceById`）：弹出条目 → 清空 `TabGroupId/TabOrder`（原组已不存在）→ `SpawnFenceWindow` 重建 → 保存 settings 并重建托盘菜单。
+
+## 5. 布局导入 / 导出
+
+**Schema**（`App.LayoutExport`，Version=1）：
+
+```csharp
+{
+    "Version": 1,
+    "ExportedAt": "ISO-8601 时间戳",
+    "Fences":   [ FenceDefinition, ... ],   // 含 TabGroupId / TabOrder，迁入侧按组复原
+    "Rules":    [ ClassificationRule, ... ],
+    "Settings": AppSettings                 // 完整设置含 RecentClosedFences（导入侧通常被新值覆盖）
+}
+```
+
+**文件名**：`desktopfences-layout-{yyyyMMdd-HHmm}.dfences.json`（双扩展名让用户用 `.json` 或 `.dfences.json` 都能匹配）。
+
+**导出**（`App.ExportLayout`）：
+- `SaveFileDialog` 选择输出路径。
+- 收集当前 `_fenceWindows` 所有 Tab 的 Model + `_rules` + `_appSettings` 写入缩进 JSON。
+
+**导入**（`App.ImportLayout`）：
+- `OpenFileDialog` 接受 `.dfences.json` / `.json` / 任意。
+- 反序列化失败 / `null` 报错并返回。
+- 二次确认（替换数量 + 导出时间）。
+- `IsBeingReplaced=true` 关闭所有 host（不写 RecentClosedFences），替换 `_rules / _appSettings`，立即 `ApplyIconAppearance + ApplyFenceShadow`，再 `SpawnFencesWithGroups` 还原 fences，保存 settings/rules，重建托盘菜单。
+

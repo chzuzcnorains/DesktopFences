@@ -133,7 +133,40 @@ public List<string> RecentClosedFences { get; set; } = new();
 **AboutSettingsPane**：
 - 72×72 logo + 版本号 + 4 列 stats + 链接
 
-## 16.10 待完成（批次 10-11）
+## 16.10 Hue / Opacity / Blur 接入 + 最近关闭 FIFO（批次 10）
 
-- **批次 10**：Hue/Opacity/Blur 接入真实 FencePanel；Fence 关闭流程写入 `RecentClosedFences`
-- **批次 11**：导入 / 导出布局；文档收尾
+**Hue / Opacity / Blur 实时生效**：
+- `App.ComputeFenceBgColor(hue, opacity)` 用与预览一致的 HSL（S=0.30, L=0.18）+ alpha 通道公式生成 `#AARRGGBB` 字符串。
+- `OnSettingsSaved` / `SpawnFenceWindow` / `DetachTab` 改为传入派生色，替换原 `DefaultFenceColor`（字段保留以兼容旧布局）。
+- `App.ApplyFenceShadow(settings)` 替换 `Application.Resources["FenceShadowEffect"]` 为新 `DropShadowEffect`；`FencePanel.xaml` 的 Effect 改 `DynamicResource` 让现有 Fence 即时刷新。
+- 启动 `LoadFencesAsync` 读取设置后立即应用。
+
+**RecentClosedFences FIFO（≤20）**：
+- `FenceHost` 新增 `IsBeingReplaced` 标志，区分"用户关闭"与"快照恢复 / 显示器切换 / 重置"等被动关闭。
+- `host.Closed` 满足 `!IsMerging && !IsBeingReplaced && !_isShuttingDown` 时调用 `RecordRecentlyClosedFences`：序列化每个 Tab 的 `FenceDefinition`，前插到 `_appSettings.RecentClosedFences`，超 20 截尾。
+- 持久化到 `settings.json`，托盘 `ShowBalloonTip` 提示 2s。
+- "退出"菜单项预先置位 `_isShuttingDown=true` 以跳过整波关闭事件的 FIFO 写入。
+
+**托盘菜单"恢复最近关闭"子菜单**：
+- 与"布局快照"并排，`DropDownOpening` 时读取 FIFO 渲染 `{Title} · {FileCount} 文件` 列表。
+- 点击调用 `RestoreClosedFenceById`：弹出条目、清掉 `TabGroupId/TabOrder`（原组已不存在）、`SpawnFenceWindow` 重建。
+- 提供"清空列表"项。空状态显示禁用项"（无最近关闭的 Fence）"。
+
+## 16.11 导入 / 导出布局 + 文档收尾（批次 11）
+
+**导出**（`App.ExportLayout`）：
+- `SaveFileDialog` 默认文件名 `desktopfences-layout-{yyyyMMdd-HHmm}.dfences.json`。
+- 写入 `LayoutExport { Version=1, ExportedAt, Fences[], Rules[], Settings }`，缩进 JSON。
+- 失败弹错误对话框；成功 `ShowToast` 报告条数与路径。
+
+**导入**（`App.ImportLayout`）：
+- `OpenFileDialog` 接受 `.dfences.json` / `.json`。
+- 读取并反序列化 `LayoutExport`；解析失败 / 内容为 null 时弹警告。
+- 二次确认对话框（替换数量 + 导出时间）。
+- 关闭所有现 host（`IsBeingReplaced=true`，避免污染 RecentClosedFences），替换 `_rules / _appSettings`，立即 `ApplyIconAppearance + ApplyFenceShadow`，再 `SpawnFencesWithGroups` 还原 fences，保存 settings/rules，重建托盘菜单。
+
+**文档收尾**：
+- `docs/plan/phase-10.md` 补全批次 10 / 11 章节并删除"待完成"列表。
+- `docs/plan/complete.md` 加入 Phase 10 ✅。
+- `docs/plan/todo.md` 移除 Phase 10 整段。
+- `README.md` 改写为简明的功能介绍 + 构建运行指引。
