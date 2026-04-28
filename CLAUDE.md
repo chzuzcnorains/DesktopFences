@@ -7,11 +7,11 @@
 DesktopFences 是一款 Windows 桌面整理工具（对标 Stardock Fences），基于 C# / .NET 9 / WPF 构建。通过桌面分区容器（Fence）管理文件，支持 `Win+D` 后仍然可见。核心功能：拖放管理、自动分类规则、折叠（Rollup）、Peek 预览、Snap 吸附、Folder Portal、桌面分页、多显示器支持。
 
 ## 核心约束
-
-**每次功能开发或技术方案调整后，必须将变更内容同步回写到 `docs/design` 目录中。** 设计文档是项目的单一事实来源（Single Source of Truth），所有已验证的技术决策、架构变更、功能规格修改都必须在设计文档中体现。
-**详细 Phase 计划见 `docs/plan/` 目录，计划完成后记得同步回写相关内容[当前计划](/docs/plan/currentplan.md) [当前任务](/docs/plan/currenttasks.md) [已完成 Phase 列表](/docs/plan/complete.md)  [待完成功能列表](/docs/plan/todo.md)** 
 **沟通用中文**
 **如果不清楚请先提问补全信息**
+**每次功能开发或技术方案调整后，必须将变更内容同步回写到 `docs/design` 目录中。** 设计文档是项目的单一事实来源（Single Source of Truth），所有已验证的技术决策、架构变更、功能规格修改都必须在设计文档中体现。
+**详细 Phase 计划见 `docs/plan/` 目录，计划完成后记得同步回写相关内容[当前计划](/docs/plan/currentplan.md) [当前任务](/docs/plan/currenttasks.md) [已完成 Phase 列表](/docs/plan/complete.md)  [待完成功能列表](/docs/plan/todo.md)** 
+**bug修复请读取`docs/bug/`目录中[问题总结](/docs/bug/README.md)来寻找相似问题，修复完bug后要生成对应的修复文档，更新[问题总结](/docs/bug/README.md)，便于以后同类问题排查**
 
 
 ## 构建与运行
@@ -89,5 +89,5 @@ DesktopFences.Core   → 纯 C# 模型、规则引擎、布局持久化（无 UI
 
 ## 当前开发阶段
 
-**Phase 0-9 全部完成（61 个单元测试通过）。** phase10完成部分。
+**Phase 0-10 全部完成（61 个单元测试通过）。** 
 
