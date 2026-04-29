@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
     public event Action? ExportLayoutRequested;
     public event Action? ImportLayoutRequested;
     public event Action<Guid>? RestoreClosedFenceRequested;
+    public event Action<Guid>? DeleteClosedFenceRequested;
 
     /// <summary>Danger-zone actions bubbled from AdvancedSettingsPane.</summary>
     public event Action? ResetLayoutRequested;
@@ -68,6 +69,7 @@ public partial class SettingsWindow : Window
         PaneFences.ExportLayoutRequested        += () => ExportLayoutRequested?.Invoke();
         PaneFences.ImportLayoutRequested        += () => ImportLayoutRequested?.Invoke();
         PaneFences.RestoreClosedFenceRequested  += id => RestoreClosedFenceRequested?.Invoke(id);
+        PaneFences.DeleteClosedFenceRequested   += id => DeleteClosedFenceRequested?.Invoke(id);
 
         PaneAdvanced.ResetLayoutRequested       += () => ResetLayoutRequested?.Invoke();
         PaneAdvanced.ClearRulesRequested        += () => ClearRulesRequested?.Invoke();
@@ -100,6 +102,13 @@ public partial class SettingsWindow : Window
     }
 
     // ── Tab selection ─────────────────────────────────────────
+
+    /// <summary>
+    /// Drop a closed-fence record from the Fences pane by id (called from App after the
+    /// underlying RecentClosedFences entry is removed, so the user sees the deletion
+    /// without reopening Settings).
+    /// </summary>
+    public void NotifyClosedFenceRemoved(Guid id) => PaneFences.RemoveClosedFenceRecord(id);
 
     /// <summary>
     /// Backwards-compatible tab selector. Legacy callers used 0 = settings, 1 = rules.

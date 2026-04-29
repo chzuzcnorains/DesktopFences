@@ -47,7 +47,22 @@
 ```
 BOTTOM ──(Win+D 检测)──→ 延迟 300ms ──→ TOPMOST
 TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTOM
+（用户主动新建 Fence 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
 ```
+
+### "让窗口可见"的两条路径
+
+新窗口注册（`RegisterWindow`）和"显示/隐藏全部"（`ToggleAllFences`）等常规路径走 `EnsureVisibleAboveDesktop` 的两步法：
+
+- 临时 `HWND_TOP` → 若前台不是桌面/任务栏，立即 `HWND_BOTTOM, SWP_SHOWWINDOW`；否则保留 `HWND_TOP`，由 5 秒 z-order 恢复定时器或前台变化兜底。
+
+但**用户主动新建 Fence**的路径（托盘菜单"新建 Fence" / "新建文件夹映射 Fence..." / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）需要"立刻可见"。Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是前台时，`HWND_TOP` 与 `HWND_BOTTOM` 都可能让 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 窗口被 DWM 推到桌面壁纸层下方，因此这些路径走 `BringNewWindowToFront`：
+
+- 前台是桌面/任务栏 → `SetWindowPos(HWND_TOPMOST, SWP_SHOWWINDOW)`：进入 topmost 类，绕开壁纸层压制
+- 前台是普通窗口 → `SetWindowPos(HWND_BOTTOM, SWP_SHOWWINDOW)`：直接放回正常 z-order 底部
+- topmost 状态会在下一次前台变成普通窗口时由 `OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM)` 自动清除（`HWND_BOTTOM` 隐含降级 topmost），不需单独定时器
+
+`SpawnFenceWindow` / `SpawnFencesWithGroups` 通过 `bringToFront` 参数选择走哪条路径——启动加载、监视器配置变化等"非用户主动"路径保持默认 `false`，避免把所有 fence 都推到 topmost 而让 `DesktopIconOverlay` 等本应在 fence 之下的窗口被遮挡。
 
 ### 窗口样式
 
@@ -85,7 +100,22 @@ TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTO
 
 ---
 
-## 5. 参考资料
+## 5. 实现复用（重构后）
+
+钩子/热键/桌面识别的样板代码集中到 `DesktopFences.Shell/Interop/`：
+
+| 工具 | 作用 |
+|------|------|
+| `LowLevelKeyboardHook` | DesktopEmbedManager 通过它安装 `WH_KEYBOARD_LL`，检测 Win+D / Escape |
+| `LowLevelMouseHook` | QuickHideManager（双击桌面）、PageSwitchManager（滚轮切页）共享 `WH_MOUSE_LL` 包装 |
+| `HotkeyHost` | PeekManager / SearchHotkeyManager / PageSwitchManager 共享一个隐藏窗口 + `WM_HOTKEY` 分发器 |
+| `WindowClassUtil` | 集中桌面/任务栏类名（`Progman`、`WorkerW`、`SHELLDLL_DefView`、`SysListView32`、`Shell_TrayWnd`、`Shell_SecondaryTrayWnd`）；`IsDesktopWindow / IsDesktopOrTaskbarWindow / IsDesktopAtPoint` 判断由 DesktopEmbedManager 等共用 |
+
+新增类似行为（例如另一个全局热键、新的桌面消息钩子）应直接复用上述工具，避免再次粘贴 30 行 `SetWindowsHookEx + UnhookWindowsHookEx` / `HwndSource + RegisterHotKey + UnregisterHotKey` 的样板。
+
+---
+
+## 6. 参考资料
 
 - [Win+D 窗口存活方案讨论](https://learn.microsoft.com/en-us/answers/questions/2127546/)
 - [Draw Behind Desktop Icons (CodeProject)](https://www.codeproject.com/Articles/856020/Draw-Behind-Desktop-Icons-in-Windows-plus)

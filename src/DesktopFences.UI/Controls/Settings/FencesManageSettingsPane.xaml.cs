@@ -22,6 +22,7 @@ public partial class FencesManageSettingsPane : UserControl
     public event Action? ExportLayoutRequested;
     public event Action? ImportLayoutRequested;
     public event Action<Guid>? RestoreClosedFenceRequested;
+    public event Action<Guid>? DeleteClosedFenceRequested;
 
     private List<FenceDefinition> _activeFences = [];
     private List<ClosedFenceRecord> _closedFences = [];
@@ -154,6 +155,19 @@ public partial class FencesManageSettingsPane : UserControl
             ClosedGrid.Items.Add(BuildClosedCard(rec));
     }
 
+    /// <summary>
+    /// Drop a closed-fence record by id and rebuild the grid + count badge in place,
+    /// so deleting / restoring an entry refreshes immediately without reopening Settings.
+    /// </summary>
+    public void RemoveClosedFenceRecord(Guid id)
+    {
+        var idx = _closedFences.FindIndex(r => r.Id == id);
+        if (idx < 0) return;
+        _closedFences.RemoveAt(idx);
+        SegClosedCount.Text = _closedFences.Count.ToString();
+        BuildClosedGrid();
+    }
+
     private UIElement BuildClosedCard(ClosedFenceRecord rec)
     {
         var card = new Border
@@ -267,6 +281,12 @@ public partial class FencesManageSettingsPane : UserControl
         Grid.SetColumn(metaText, 0);
         metaGrid.Children.Add(metaText);
 
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
         var restoreBtn = new Button
         {
             Content = "恢复",
@@ -275,8 +295,21 @@ public partial class FencesManageSettingsPane : UserControl
             VerticalAlignment = VerticalAlignment.Center,
         };
         restoreBtn.Click += (_, _) => RestoreClosedFenceRequested?.Invoke(rec.Id);
-        Grid.SetColumn(restoreBtn, 1);
-        metaGrid.Children.Add(restoreBtn);
+        actions.Children.Add(restoreBtn);
+
+        var deleteBtn = new Button
+        {
+            Content = "删除",
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "从最近关闭列表中永久移除",
+        };
+        deleteBtn.Click += (_, _) => DeleteClosedFenceRequested?.Invoke(rec.Id);
+        actions.Children.Add(deleteBtn);
+
+        Grid.SetColumn(actions, 1);
+        metaGrid.Children.Add(actions);
 
         meta.Child = metaGrid;
         stack.Children.Add(meta);

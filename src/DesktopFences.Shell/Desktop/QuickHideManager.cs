@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using DesktopFences.Shell.Interop;
 
 namespace DesktopFences.Shell.Desktop;
@@ -12,41 +10,20 @@ namespace DesktopFences.Shell.Desktop;
 /// </summary>
 public sealed class QuickHideManager : IDisposable
 {
-    private IntPtr _mouseHookId;
-    private NativeMethods.LowLevelMouseProc? _mouseHookProc;
+    private readonly LowLevelMouseHook _hook = new();
     private DateTime _lastClickTime = DateTime.MinValue;
     private NativeMethods.POINT _lastClickPoint;
     private NativeMethods.POINT _pendingDownPoint;
     private bool _hasPendingDown;
-    private bool _disposed;
 
     private const int DoubleClickThresholdMs = 500;
     private const int DoubleClickDistancePx = 4;
 
-    /// <summary>
-    /// Fired when a double-click on the desktop is detected.
-    /// </summary>
+    /// <summary>Fired when a double-click on the desktop is detected.</summary>
     public event Action? DesktopDoubleClick;
 
-    public void Start()
-    {
-        if (_mouseHookId != IntPtr.Zero) return; // already started
-        _mouseHookProc = MouseHookCallback;
-        using var curProcess = Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule!;
-        _mouseHookId = NativeMethods.SetWindowsHookEx(
-            NativeMethods.WH_MOUSE_LL,
-            _mouseHookProc,
-            NativeMethods.GetModuleHandle(curModule.ModuleName),
-            0);
-    }
-
-    public void Stop()
-    {
-        if (_mouseHookId == IntPtr.Zero) return;
-        NativeMethods.UnhookWindowsHookEx(_mouseHookId);
-        _mouseHookId = IntPtr.Zero;
-    }
+    public void Start() => _hook.Install(MouseHookCallback);
+    public void Stop() => _hook.Uninstall();
 
     private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
@@ -63,11 +40,11 @@ public sealed class QuickHideManager : IDisposable
                 // must NOT update _lastClickTime — otherwise a screenshot drag-press
                 // followed by a stray desktop click later would be mistaken for a
                 // double-click and hide every fence.
-                if (!IsDesktopWindow(ms.pt))
+                if (!WindowClassUtil.IsDesktopAtPoint(ms.pt))
                 {
                     _lastClickTime = DateTime.MinValue;
                     _hasPendingDown = false;
-                    return NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+                    return _hook.CallNext(nCode, wParam, lParam);
                 }
 
                 _pendingDownPoint = ms.pt;
@@ -83,10 +60,10 @@ public sealed class QuickHideManager : IDisposable
                 // drags that begin on the desktop don't seed a click timestamp.
                 if (Math.Abs(ms.pt.X - _pendingDownPoint.X) > DoubleClickDistancePx ||
                     Math.Abs(ms.pt.Y - _pendingDownPoint.Y) > DoubleClickDistancePx ||
-                    !IsDesktopWindow(ms.pt))
+                    !WindowClassUtil.IsDesktopAtPoint(ms.pt))
                 {
                     _lastClickTime = DateTime.MinValue;
-                    return NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+                    return _hook.CallNext(nCode, wParam, lParam);
                 }
 
                 var now = DateTime.UtcNow;
@@ -107,48 +84,8 @@ public sealed class QuickHideManager : IDisposable
             }
         }
 
-        return NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+        return _hook.CallNext(nCode, wParam, lParam);
     }
 
-    private static bool IsDesktopWindow(NativeMethods.POINT pt)
-    {
-        var hwnd = NativeMethods.WindowFromPoint(pt);
-        if (hwnd == IntPtr.Zero) return false;
-
-        var className = GetWindowClassName(hwnd);
-
-        // Desktop window classes
-        if (className is "Progman" or "WorkerW" or "SysListView32" or "SHELLDLL_DefView")
-            return true;
-
-        // Also check parent — SysListView32 is child of SHELLDLL_DefView which is child of WorkerW
-        var parent = NativeMethods.GetParent(hwnd);
-        if (parent != IntPtr.Zero)
-        {
-            var parentClass = GetWindowClassName(parent);
-            if (parentClass is "SHELLDLL_DefView" or "Progman" or "WorkerW")
-                return true;
-        }
-
-        return false;
-    }
-
-    private static string GetWindowClassName(IntPtr hwnd)
-    {
-        var sb = new StringBuilder(256);
-        NativeMethods.GetClassName(hwnd, sb, sb.Capacity);
-        return sb.ToString();
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
-        if (_mouseHookId != IntPtr.Zero)
-        {
-            NativeMethods.UnhookWindowsHookEx(_mouseHookId);
-            _mouseHookId = IntPtr.Zero;
-        }
-    }
+    public void Dispose() => _hook.Dispose();
 }

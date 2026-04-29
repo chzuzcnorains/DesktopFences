@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows.Threading;
 using DesktopFences.Shell.Interop;
 
@@ -22,9 +20,8 @@ namespace DesktopFences.Shell.Desktop;
 public sealed class DesktopEmbedManager : IDisposable
 {
     private readonly List<IntPtr> _managedWindows = [];
-    private IntPtr _keyboardHookId;
+    private readonly LowLevelKeyboardHook _keyboardHook = new();
     private IntPtr _winEventHookId;
-    private NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
     private NativeMethods.WinEventDelegate? _winEventProc;
     private bool _isTopmost;
     private bool _isPeekActive;
@@ -45,25 +42,9 @@ public sealed class DesktopEmbedManager : IDisposable
     public void Start()
     {
         _dispatcher = Dispatcher.CurrentDispatcher;
-        InstallKeyboardHook();
+        _keyboardHook.Install(KeyboardHookCallback);
         InstallForegroundHook();
         StartZOrderRecoveryTimer();
-    }
-
-    private void InstallKeyboardHook()
-    {
-        _keyboardHookProc = KeyboardHookCallback;
-        using var curProcess = Process.GetCurrentProcess();
-        using var curModule = curProcess.MainModule!;
-        _keyboardHookId = NativeMethods.SetWindowsHookEx(
-            NativeMethods.WH_KEYBOARD_LL,
-            _keyboardHookProc,
-            NativeMethods.GetModuleHandle(curModule.ModuleName),
-            0);
-
-        if (_keyboardHookId == IntPtr.Zero)
-            throw new InvalidOperationException(
-                $"Failed to install keyboard hook. Error: {Marshal.GetLastWin32Error()}");
     }
 
     private void InstallForegroundHook()
@@ -92,7 +73,7 @@ public sealed class DesktopEmbedManager : IDisposable
                 {
                     // Skip recovery when desktop is foreground — calling HWND_BOTTOM
                     // in this state can push windows behind the desktop on Windows 11.
-                    if (!IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+                    if (!WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
                     {
                         foreach (var hwnd in _managedWindows)
                             SendToBottom(hwnd);
@@ -165,7 +146,7 @@ public sealed class DesktopEmbedManager : IDisposable
         // in this state can push our window behind the desktop. Defer the
         // z-order correction to the recovery timer (fires in ≤5 seconds)
         // or the next foreground change to a non-desktop window.
-        if (IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
             return;
 
         SendToBottom(hwnd);
@@ -196,7 +177,7 @@ public sealed class DesktopEmbedManager : IDisposable
             }
         }
 
-        return NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+        return _keyboardHook.CallNext(nCode, wParam, lParam);
     }
 
     private void OnShowDesktopDetected()
@@ -279,7 +260,7 @@ public sealed class DesktopEmbedManager : IDisposable
         {
             // If the new foreground is a desktop window (Progman/WorkerW), DON'T dismiss —
             // being visible on top of the desktop is the intended state after Win+D.
-            if (IsDesktopWindow(hwnd))
+            if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
                 return;
 
             // A real application window activated → fences go back to bottom
@@ -291,7 +272,7 @@ public sealed class DesktopEmbedManager : IDisposable
             // If the foreground is a desktop window, our windows at HWND_BOTTOM are already
             // correctly positioned above it — no recovery needed. Calling SendToBottom when
             // the desktop is foreground can push our windows behind the desktop on Windows 11.
-            if (IsDesktopWindow(hwnd))
+            if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
                 return;
 
             // Debounce z-order recovery: wait 200ms to coalesce rapid foreground changes
@@ -328,7 +309,7 @@ public sealed class DesktopEmbedManager : IDisposable
 
         // Skip recovery when desktop is foreground — calling HWND_BOTTOM
         // in this state can push windows behind the desktop on Windows 11.
-        if (IsDesktopWindow(NativeMethods.GetForegroundWindow()))
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
             return;
 
         foreach (var w in _managedWindows)
@@ -401,7 +382,7 @@ public sealed class DesktopEmbedManager : IDisposable
         // Step 2: Ask the z-order recovery to fix it up when it's safe
         // We can also check if foreground is not desktop first, and if so, set bottom immediately
         var foreground = NativeMethods.GetForegroundWindow();
-        if (!IsDesktopWindow(foreground))
+        if (!WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
         {
             // Safe to set bottom now
             NativeMethods.SetWindowPos(
@@ -413,6 +394,48 @@ public sealed class DesktopEmbedManager : IDisposable
         // If desktop IS foreground, we just leave it at HWND_TOP for now, and
         // the z-order recovery timer will fix it when the foreground changes.
         // HWND_TOP is okay - it's still below normal apps because of WS_EX_NOACTIVATE.
+    }
+
+    /// <summary>
+    /// 让一个新创建的窗口立刻可见在桌面之上，专为"用户主动新建 Fence"路径使用
+    /// （托盘菜单的"新建 Fence" / "新建文件夹映射 Fence..." / 规则触发创建）。
+    ///
+    /// Windows 11 上当桌面 (Progman/WorkerW) 或任务栏 (Shell_TrayWnd) 是前台时，
+    /// 对 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE 窗口调用 SetWindowPos(HWND_TOP) 仍可
+    /// 能被 DWM 推到桌面壁纸层下方，导致窗口看不见。本方法用 HWND_TOPMOST 绕开壁纸层
+    /// 压制确保新窗口立刻可见，并跟踪此 hwnd —— 当用户随后切到任意普通窗口时，
+    /// OnForegroundChanged 会调用 SendToBottom，HWND_BOTTOM 会自动清除 topmost 状态。
+    ///
+    /// 启动加载、ToggleAllFences 等路径不应调用本方法，以免污染常规 z-order。
+    /// </summary>
+    public void BringNewWindowToFront(IntPtr hwnd)
+    {
+        if (!NativeMethods.IsWindowVisible(hwnd))
+        {
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
+        }
+
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
+        {
+            // 桌面/任务栏前台 —— HWND_TOP 不可靠，用 HWND_TOPMOST。
+            // OnForegroundChanged → SendToBottom 会在用户切到普通窗口时通过
+            // HWND_BOTTOM 自动清除 topmost。
+            NativeMethods.SetWindowPos(
+                hwnd, NativeMethods.HWND_TOPMOST,
+                0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+        else
+        {
+            // 前台是普通窗口，正常逻辑已经够用 —— 直接放回 z-order 底部
+            NativeMethods.SetWindowPos(
+                hwnd, NativeMethods.HWND_BOTTOM,
+                0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
     }
 
     private static void SendToBottom(IntPtr hwnd)
@@ -427,7 +450,7 @@ public sealed class DesktopEmbedManager : IDisposable
         // window triggers a z-order recovery.
 
         var foreground = NativeMethods.GetForegroundWindow();
-        if (IsDesktopWindow(foreground))
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
         {
             // When desktop is foreground, don't change z-order at all!
             // Just ensure we're visible, but don't touch z-order.
@@ -440,59 +463,6 @@ public sealed class DesktopEmbedManager : IDisposable
             0, 0, 0, 0,
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
             NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-    }
-
-    /// <summary>
-    /// Check if a window handle belongs to the desktop (Progman or WorkerW).
-    /// Used to prevent Win+D TOPMOST dismissal and HWND_BOTTOM calls when
-    /// the desktop is foreground (which can push fence windows behind the desktop).
-    /// </summary>
-    private static bool IsDesktopWindow(IntPtr hwnd)
-    {
-        if (hwnd == IntPtr.Zero) return false;
-
-        var sb = new StringBuilder(256);
-        NativeMethods.GetClassName(hwnd, sb, sb.Capacity);
-        var className = sb.ToString();
-
-        // 桌面本身
-        if (className is "Progman" or "WorkerW" or "SHELLDLL_DefView" or "SysListView32")
-            return true;
-
-        // 任务栏相关
-        if (className is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
-            return true;
-
-        // Windows 标准菜单类，如果父窗口是任务栏，也认为是桌面相关
-        if (className == "#32768")
-        {
-            // 检查父链是否包含任务栏
-            var menuParent = NativeMethods.GetParent(hwnd);
-            while (menuParent != IntPtr.Zero)
-            {
-                sb.Clear();
-                NativeMethods.GetClassName(menuParent, sb, sb.Capacity);
-                var menuParentClass = sb.ToString();
-                if (menuParentClass is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
-                    return true;
-                menuParent = NativeMethods.GetParent(menuParent);
-            }
-        }
-
-        // 检查父链是否包含桌面或任务栏相关窗口
-        var parent = NativeMethods.GetParent(hwnd);
-        while (parent != IntPtr.Zero)
-        {
-            sb.Clear();
-            NativeMethods.GetClassName(parent, sb, sb.Capacity);
-            var parentClass = sb.ToString();
-            if (parentClass is "Progman" or "WorkerW" or "SHELLDLL_DefView"
-                or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd")
-                return true;
-            parent = NativeMethods.GetParent(parent);
-        }
-
-        return false;
     }
 
     public bool IsTopmost => _isTopmost;
@@ -508,11 +478,7 @@ public sealed class DesktopEmbedManager : IDisposable
         _zOrderRecoveryTimer?.Dispose();
         _foregroundDebounceTimer?.Stop();
 
-        if (_keyboardHookId != IntPtr.Zero)
-        {
-            NativeMethods.UnhookWindowsHookEx(_keyboardHookId);
-            _keyboardHookId = IntPtr.Zero;
-        }
+        _keyboardHook.Dispose();
 
         if (_winEventHookId != IntPtr.Zero)
         {

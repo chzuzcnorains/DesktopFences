@@ -24,6 +24,10 @@
 - **快照保存**：用户手动触发，完整序列化当前状态
 - **原子写入**：写入临时文件 → rename 覆盖，防止写入中途崩溃导致数据丢失
 
+`JsonLayoutStore` 的全部读写一律走 `JsonFileStore.ReadAsync<T>` / `JsonFileStore.WriteAtomicAsync<T>` 助手，
+原子写入语义集中实现。新增任何 JSON 持久化文件请直接调用这两个助手，不要重复写
+"`OpenRead/DeserializeAsync` 或 `Create/SerializeAsync + File.Move`" 模板。
+
 ## 3. 数据模型
 
 ### FenceDefinition
@@ -87,11 +91,21 @@ public List<string> RecentClosedFences { get; set; } = new()
 
 **用途**：用户关闭 Fence 后保留可恢复入口，避免误关。
 
-**结构**：`AppSettings.RecentClosedFences` 是 `List<string>`，每条为单个 `FenceDefinition` 的 JSON 序列化串。
+**结构**：`AppSettings.RecentClosedFences` 是 `List<string>`，每条为 `RecentClosedFenceEntry`（App 内部 wrapper）的 JSON 序列化串：
+
+```csharp
+class RecentClosedFenceEntry
+{
+    FenceDefinition Definition;     // 完整 fence 定义
+    DateTimeOffset  ClosedAt;       // 真实关闭时间（用于"X 分钟前"显示）
+}
+```
+
+旧格式（bare `FenceDefinition` JSON，无 wrapper）的设置文件仍可读取——`App.DeserializeRecentClosedEntry` 通过检测根级是否有 `"Definition"` 属性决定走新/旧分支，旧条目的 `ClosedAt` 兜底为读取时刻。
 
 **写入规则**（`App.RecordRecentlyClosedFences`）：
 - 触发条件：`host.Closed` 满足 `!IsMerging && !IsBeingReplaced && !_isShuttingDown`。
-- Tab 组内每个 Tab 单独入栈，前插（最新在 index 0），上限 20，超出从尾部丢弃。
+- Tab 组内每个 Tab 单独入栈（每条都带写入时刻 `ClosedAt`），前插（最新在 index 0），上限 20，超出从尾部丢弃。
 - 写入后 `SaveSettingsAsync` 持久化，托盘 `ShowBalloonTip` 提示，重建托盘菜单。
 
 **关闭语义区分**：
@@ -99,7 +113,9 @@ public List<string> RecentClosedFences { get; set; } = new()
 - `FenceHost.IsBeingReplaced` — 快照恢复 / 显示器重配 / 重置布局触发的批量关闭，正常清理但不入 FIFO。
 - `App._isShuttingDown` — 退出菜单 / OnExit 全程进入此态，整波关闭都跳过 FIFO 写入。
 
-**恢复**（`App.RestoreClosedFenceById`）：弹出条目 → 清空 `TabGroupId/TabOrder`（原组已不存在）→ `SpawnFenceWindow` 重建 → 保存 settings 并重建托盘菜单。
+**用户操作**：
+- **恢复**（`App.RestoreClosedFenceById`）：弹出条目 → 清空 `TabGroupId/TabOrder`（原组已不存在）→ `SpawnFenceWindow(bringToFront: true)` 重建 → 保存 settings 并重建托盘菜单。
+- **删除**（`App.DeleteClosedFenceById`）：仅从 FIFO 摘除条目并持久化 + 重建托盘菜单，不创建窗口。设置 → Fence 管理 → 最近关闭中每张卡片独立的"删除"按钮触发；设置面板通过 `SettingsWindow.NotifyClosedFenceRemoved(id)` 即时刷新计数和卡片网格，无需关闭重开。
 
 ## 5. 布局导入 / 导出
 

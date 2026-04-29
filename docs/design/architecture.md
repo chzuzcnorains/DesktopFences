@@ -108,21 +108,25 @@ src/
 │   │    ├── AppSettings.cs
 │   │    └── TabStyle.cs
 │   └── Services/
-│        ├── IRuleEngine.cs
-│        ├── ILayoutStore.cs
-│        └── RuleEngine.cs
+│        ├── IRuleEngine.cs / RuleEngine.cs
+│        ├── ILayoutStore.cs / JsonLayoutStore.cs
+│        ├── JsonFileStore.cs        # 原子 JSON 读/写助手
+│        ├── PageManager.cs / SnapshotManager.cs
+│        └── SnapEngine.cs
 │
 ├── DesktopFences.Shell/
 │   ├── Interop/
-│   │    └── NativeMethods.cs      # Win32 P/Invoke 声明
+│   │    ├── NativeMethods.cs        # Win32 P/Invoke 声明
+│   │    ├── HotkeyHost.cs           # 全局热键注册宿主
+│   │    ├── LowLevelKeyboardHook.cs # WH_KEYBOARD_LL RAII 包装
+│   │    ├── LowLevelMouseHook.cs    # WH_MOUSE_LL RAII 包装
+│   │    └── WindowClassUtil.cs      # 桌面/任务栏类名识别
 │   ├── Desktop/
-│   │    └── DesktopEmbedManager.cs
-│   ├── Icon/
-│   │    └── ShellIconExtractor.cs
-│   ├── FileMonitor/
-│   │    └── DesktopFileMonitor.cs
-│   └── DragDrop/
-│        └── DragDropHelper.cs
+│   │    ├── DesktopEmbedManager.cs
+│   │    ├── PeekManager.cs / QuickHideManager.cs
+│   │    ├── SearchHotkeyManager.cs / PageSwitchManager.cs
+│   │    ├── ShellIconExtractor.cs
+│   │    └── DesktopFileMonitor.cs / FolderPortalWatcher.cs
 │
 ├── DesktopFences.UI/
 │   ├── Controls/
@@ -140,7 +144,7 @@ src/
 │
 └── DesktopFences.App/
      ├── App.xaml(.cs)
-     ├── TrayIconManager.cs
+     ├── FenceHostExtensions.cs    # FenceHost 集合查询扩展
      └── StartupManager.cs
 ```
 
@@ -172,3 +176,43 @@ src/
 - 原子写入（写临时文件 → rename）防止数据损坏
 - 图标缓存按文件扩展名（非路径）缓存，LRU 上限 500
 - FileSystemWatcher + 定时全量扫描（30 秒）保证可靠性
+
+---
+
+## 7. 通用抽象工具
+
+为消除 Manager 类、持久化层、集合查询的样板代码，引入了一组小而专注的工具，每个 Manager 只保留自己独有的业务逻辑：
+
+### 7.1 Shell 层 Interop 工具（internal）
+
+| 工具 | 职责 | 替代 |
+|------|------|------|
+| `HotkeyHost` | 持有隐藏 message-only 窗口，注册多个 `WM_HOTKEY` 并按 ID 分发回调；Dispose 自动反注册全部热键 | PeekManager / SearchHotkeyManager / PageSwitchManager 中重复的 `HwndSource + AddHook + RegisterHotKey + UnregisterHotKey` 模板 |
+| `LowLevelKeyboardHook` | `SetWindowsHookEx(WH_KEYBOARD_LL)` RAII 包装，强引用 callback delegate 避免 GC | DesktopEmbedManager 内联钩子安装/卸载代码 |
+| `LowLevelMouseHook` | `SetWindowsHookEx(WH_MOUSE_LL)` RAII 包装；提供 `CallNext` 转发 | QuickHideManager / PageSwitchManager 中重复的鼠标钩子样板 |
+| `WindowClassUtil` | 集中桌面/任务栏类名常量；提供 `IsDesktopWindow / IsDesktopOrTaskbarWindow / IsDesktopAtPoint` | DesktopEmbedManager / QuickHideManager / PageSwitchManager 三处重复的 `Progman/WorkerW/...` 类名判断 |
+
+### 7.2 Core 层持久化工具
+
+| 工具 | 职责 | 替代 |
+|------|------|------|
+| `JsonFileStore` | 静态 `ReadAsync<T>(path, opts)` / `WriteAtomicAsync<T>(path, value, opts)` | `JsonLayoutStore` 中 14 处重复的 read-or-default 与 temp-file-then-rename 写入 |
+
+### 7.3 App 层集合扩展
+
+| 扩展方法 | 说明 |
+|----------|------|
+| `IEnumerable<FenceHost>.AllTabs()` | 展平所有 tab ViewModel |
+| `IEnumerable<FenceHost>.AllDefinitions()` | 展平所有 tab 模型（`FenceDefinition` 列表） |
+| `IEnumerable<FenceHost>.FindTabById(Guid)` | 按 ID 查 tab |
+| `IEnumerable<FenceHost>.FindHostByTabId(Guid)` | 按 tab ID 查宿主窗口 |
+| `IEnumerable<FenceHost>.ContainsFile(string)` | 任一 fence 是否已包含路径 |
+
+替代 `App.xaml.cs` 中 10+ 处 `_fenceWindows.SelectMany(f => f.Tabs.Select(...))` 与三层嵌套 `foreach`。
+
+### 7.4 设计原则
+
+- 工具均为 internal — 不破坏 public API、不影响插件生态。
+- Manager 类对外行为完全保持不变（事件签名、`Start/Stop/Dispose` 语义未变）；仅内部实现复用通用工具。
+- Win32 类名常量只允许在 `WindowClassUtil` 中出现；新增桌面识别需求只改一个地方。
+- JSON 持久化通过 `JsonFileStore` 路由 — 新增持久化文件无需复制 13 行 IO 模板。
