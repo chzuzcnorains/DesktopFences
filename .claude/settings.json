@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(dotnet test *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git show 0f7ebee -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
+      "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git log --oneline -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
+      "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git show c4af737 -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
+      "WebSearch"
     ]
   }
 }

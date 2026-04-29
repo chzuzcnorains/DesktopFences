@@ -41,7 +41,6 @@ public sealed class ShellIconExtractor
         var icon = ExtractIcon(filePath, large);
         if (icon is null) return null;
 
-        // Freeze for cross-thread usage
         icon.Freeze();
         _cache[key] = icon;
         AddToLru(key);
@@ -81,9 +80,9 @@ public sealed class ShellIconExtractor
     private static ImageSource? ExtractIcon(string filePath, bool large)
     {
         var flags = NativeMethods.SHGFI_ICON |
+                    NativeMethods.SHGFI_ADDOVERLAYS |
                     (large ? NativeMethods.SHGFI_LARGEICON : NativeMethods.SHGFI_SMALLICON);
 
-        // If file doesn't exist, use USEFILEATTRIBUTES to get icon by extension
         if (!File.Exists(filePath) && !Directory.Exists(filePath))
             flags |= NativeMethods.SHGFI_USEFILEATTRIBUTES;
 
@@ -104,6 +103,7 @@ public sealed class ShellIconExtractor
                 shfi.hIcon,
                 Int32Rect.Empty,
                 BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
             return source;
         }
         finally

@@ -165,7 +165,25 @@ internal static class NativeMethods
     public const uint SHGFI_SMALLICON = 0x000000001;
     public const uint SHGFI_LARGEICON = 0x000000000;
     public const uint SHGFI_USEFILEATTRIBUTES = 0x000000010;
+    public const uint SHGFI_ADDOVERLAYS = 0x000000020;
+    public const uint SHGFI_OVERLAYINDEX = 0x000000040;
+    public const uint SHGFI_SYSICONINDEX = 0x000004000;
     public const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
+
+    // 图标尺寸
+    public const int SHIL_LARGE = 0;     // 32x32
+    public const int SHIL_SMALL = 1;     // 16x16
+    public const int SHIL_EXTRALARGE = 2; // 48x48
+    public const int SHIL_JUMBO = 3;      // 256x256 (Vista+)
+
+    [DllImport("shell32.dll")]
+    public static extern int SHGetImageList(int iImageList, ref Guid riid, out IntPtr ppv);
+
+    [DllImport("comctl32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr ImageList_GetIcon(IntPtr himl, int i, int flags);
+
+    public const int ILD_NORMAL = 0x00000000;
+    public const int ILD_TRANSPARENT = 0x00000001;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct SHFILEINFO

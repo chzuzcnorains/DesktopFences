@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using DesktopFences.Shell.Desktop;
 
 namespace DesktopFences.UI.Controls;
@@ -174,11 +175,21 @@ public partial class DesktopIconOverlay : Window
         var image = new Image
         {
             Source = icon,
-            Width = 48,
-            Height = 48,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Stretch = Stretch.Uniform, // 均匀缩放以填充
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
+
+        // 使用高质量渲染模式
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        RenderOptions.SetClearTypeHint(image, ClearTypeHint.Enabled);
+
+        // 直接设置为你测量的 Windows 原生尺寸！
+        // 在 150% DPI 下，72 物理像素 = 72 / 1.5 ≈ 48 DIP
+        image.Width = 48;
+        image.Height = 48;
 
         var text = new TextBlock
         {
