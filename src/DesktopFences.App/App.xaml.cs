@@ -751,6 +751,9 @@ public partial class App : Application
             // Update snap threshold on existing hosts
             host.SnapThreshold = settings.SnapThreshold;
             host.Panel.SnapThreshold = settings.SnapThreshold;
+
+            // Phase 11: live-update DWM Acrylic from FenceBlurRadius
+            host.SetAcrylicBlur(settings.FenceBlurRadius);
         }
 
         _ = _layoutStore!.SaveSettingsAsync(settings);
@@ -1100,6 +1103,9 @@ public partial class App : Application
         host.SyncTabStripBackground();
         host.SetTabStyle(_appSettings.TabStyle);
 
+        // Phase 11: enable DWM Acrylic per current FenceBlurRadius
+        host.SetAcrylicBlur(_appSettings.FenceBlurRadius);
+
         host.Panel.LoadAllIcons();
 
         if (vm.IsPortalMode)
@@ -1296,6 +1302,10 @@ public partial class App : Application
             _appSettings.TitleBarFontSize);
         newHost.SyncTabStripBackground();
         newHost.SetTabStyle(_appSettings.TabStyle);
+
+        // Phase 11: enable DWM Acrylic per current FenceBlurRadius
+        newHost.SetAcrylicBlur(_appSettings.FenceBlurRadius);
+
         newHost.Panel.LoadAllIcons();
         RequestAutoSave();
     }

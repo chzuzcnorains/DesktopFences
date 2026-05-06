@@ -48,21 +48,36 @@
 BOTTOM ──(Win+D 检测)──→ 延迟 300ms ──→ TOPMOST
 TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTOM
 （用户主动新建 Fence 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
+（RegisterWindow / EnsureVisibleAboveDesktop 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
+（前台变成桌面/任务栏时 OnForegroundChanged / 5 秒定时器）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
 ```
 
-### "让窗口可见"的两条路径
+### "让窗口可见"的统一策略
 
-新窗口注册（`RegisterWindow`）和"显示/隐藏全部"（`ToggleAllFences`）等常规路径走 `EnsureVisibleAboveDesktop` 的两步法：
+Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是前台时，对 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 窗口调用 `SetWindowPos(HWND_TOP)` 或 `HWND_BOTTOM` 都会被 DWM 推到桌面壁纸下方。因此统一采用"前台桌面/任务栏用 `HWND_TOPMOST`、前台普通窗口用 `HWND_BOTTOM`"的策略：
 
-- 临时 `HWND_TOP` → 若前台不是桌面/任务栏，立即 `HWND_BOTTOM, SWP_SHOWWINDOW`；否则保留 `HWND_TOP`，由 5 秒 z-order 恢复定时器或前台变化兜底。
+- **前台是桌面/任务栏** → `SetWindowPos(HWND_TOPMOST, SWP_SHOWWINDOW)`：绕开壁纸层压制
+- **前台是普通窗口** → `SetWindowPos(HWND_BOTTOM, SWP_SHOWWINDOW)`：放回正常 z-order 底部
+- **清除 topmost**：切到任意普通窗口 → `OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM)`（`HWND_BOTTOM` 隐含降级 topmost，不需单独 `HWND_NOTOPMOST`）
 
-但**用户主动新建 Fence**的路径（托盘菜单"新建 Fence" / "新建文件夹映射 Fence..." / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）需要"立刻可见"。Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是前台时，`HWND_TOP` 与 `HWND_BOTTOM` 都可能让 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 窗口被 DWM 推到桌面壁纸层下方，因此这些路径走 `BringNewWindowToFront`：
+### 应用此策略的路径
 
-- 前台是桌面/任务栏 → `SetWindowPos(HWND_TOPMOST, SWP_SHOWWINDOW)`：进入 topmost 类，绕开壁纸层压制
-- 前台是普通窗口 → `SetWindowPos(HWND_BOTTOM, SWP_SHOWWINDOW)`：直接放回正常 z-order 底部
-- topmost 状态会在下一次前台变成普通窗口时由 `OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM)` 自动清除（`HWND_BOTTOM` 隐含降级 topmost），不需单独定时器
+所有让窗口可见的路径都统一采用此策略：
+1. **RegisterWindow**：所有新窗口（包括 `DesktopIconOverlay` 与 fence）启动时注册，确保立即可见
+2. **BringNewWindowToFront**：用户主动新建 Fence（托盘菜单"新建 Fence" / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）
+3. **EnsureVisibleAboveDesktop**：启动加载的 fence、`ToggleAllFences` 等常规路径
+4. **OnForegroundChanged（前台变成桌面/任务栏分支）**：截图工具关闭后前台立刻回到 Progman 这类场景，即时拉回
+5. **5 秒 z-order 恢复定时器（桌面前台分支）**：兜底机制，覆盖边界情况
 
-`SpawnFenceWindow` / `SpawnFencesWithGroups` 通过 `bringToFront` 参数选择走哪条路径——启动加载、监视器配置变化等"非用户主动"路径保持默认 `false`，避免把所有 fence 都推到 topmost 而让 `DesktopIconOverlay` 等本应在 fence 之下的窗口被遮挡。
+### _isTopmost 状态不变量
+
+上述路径的 "借用 topmost" **不修改 `_isTopmost` 字段**——`_isTopmost` 仍然只由 Win+D / Peek 拥有，避免与现有 Win+D 状态机、Peek 模式、拖拽模式冲突。
+
+### 保留不变的边界保护
+
+- `SendToBottom` 仍然在桌面前台时 `return`：避免再次把可见窗口压下去
+- `OnDebouncedForegroundRecovery` 仍然在桌面前台时 `return`：被 200ms 防抖保护，桌面前台已由 `OnForegroundChanged` 即时处理
+- 所有守护（`_isTopmost` / `_isPeekActive` / `_isDragging` / `_pendingTopmost`）全部保留：避免冲突
 
 ### 窗口样式
 
@@ -97,6 +112,7 @@ TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTO
 | `RegisterHotKey` | 注册 Peek 热键 |
 | `SHGetFileInfo` / `IExtractIcon` | 提取文件图标 |
 | `SHChangeNotifyRegister` | Shell 变更通知（桌面文件增删） |
+| `SetWindowCompositionAttribute(WCA_ACCENT_POLICY)` | DWM Acrylic 背景模糊（Phase 11，详见 [acrylic-blur.md](acrylic-blur.md)） |
 
 ---
 

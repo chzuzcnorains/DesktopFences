@@ -24,6 +24,7 @@ public partial class FenceHost : Window
     private TabStyle _tabStyle = TabStyle.Flat;
     private bool _isMovingOrSizing;
     private SnapGuideOverlay? _snapGuideOverlay;
+    private int _acrylicBlur;
 
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
@@ -421,8 +422,28 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         var hwndSource = HwndSource.FromHwnd(helper.Handle);
         hwndSource?.AddHook(WndProc);
 
+        // Phase 11: apply DWM Acrylic if requested (set via SetAcrylicBlur before Show()).
+        if (_acrylicBlur > 0)
+            AcrylicCompositor.Enable(helper.Handle);
+
         // Fade-in animation on create
         FenceContent.AnimateFadeIn();
+    }
+
+    /// <summary>
+    /// Phase 11: enable/disable DWM Acrylic blur-behind based on FenceBlurRadius.
+    /// Safe to call before or after the window's hwnd is created — applied lazily
+    /// in OnLoaded if the handle is not yet available.
+    /// </summary>
+    public void SetAcrylicBlur(int blur)
+    {
+        _acrylicBlur = blur;
+        var helper = new WindowInteropHelper(this);
+        if (helper.Handle == IntPtr.Zero) return;
+        if (blur > 0)
+            AcrylicCompositor.Enable(helper.Handle);
+        else
+            AcrylicCompositor.Disable(helper.Handle);
     }
 
     private void OnClosed(object? sender, EventArgs e)

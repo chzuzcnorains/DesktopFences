@@ -6,7 +6,7 @@
 - [ ] 自动更新检查（需 GitHub 仓库地址）
 
 ### Phase 8 待完成
-- [ ] DWM 背景模糊
+- [x] DWM 背景模糊 ✅ 由 [Phase 11](phase-11.md) 完成（`SetWindowCompositionAttribute` + `ACCENT_ENABLE_ACRYLICBLURBEHIND`）
 
 ## 已移除项（功能已被替代或无需实现）
 

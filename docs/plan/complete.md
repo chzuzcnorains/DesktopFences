@@ -15,3 +15,4 @@
 - [Phase 9b: DarkTheme 深化](phase-9b.md) ✅
 - [Phase 9c: 图标系统](phase-9c.md) ✅
 - [Phase 10: 视觉系统升级](phase-10.md) ✅
+- [Phase 11: DWM Acrylic 背景模糊](phase-11.md) ✅
