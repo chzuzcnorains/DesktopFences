@@ -1,0 +1,20 @@
+﻿<Application x:Class="DesktopFences.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DesktopFences.App"
+             Startup="App_OnStartup"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/DarkTheme.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/TabStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/AppLogo.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/Icons.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/FileTypes.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/FileTile.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/Settings.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

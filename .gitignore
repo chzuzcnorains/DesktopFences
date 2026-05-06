@@ -426,6 +426,10 @@ test-results/
 *.dmg
 *.app
 
+# 否定上面的 *.app:DesktopFences.App 项目目录被它误伤,显式放回追踪
+# 注:不加 /** —— 子目录 bin/ obj/ 等仍由前面的 [Bb]in/、[Oo]bj/ 规则忽略
+!src/DesktopFences.App/
+
 # content below from: https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 # General
 .DS_Store
