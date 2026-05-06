@@ -15,6 +15,7 @@
 | 7 | [最近关闭列表无法删除且时间错误](closed_fences_no_delete_and_wrong_time.md) | Fence 管理 → 最近关闭只有恢复没有删除按钮，且关闭时间永远显示"刚刚" | 已修复 | 2026-04-29 |
 | 8 | [滚动条样式与暗色设计不匹配](scrollbar_native_style.md) | 滚动条都是 Windows 原生灰白滚动条（带上下箭头按钮），与项目整体暗色 UI 风格严重不协调| 已修复 | 2026-04-29 |
 | 9 | [未归档icon显示模糊](icon_blurry.md) | 未归档的桌面图标显示不够锐利，比Windows 11原生桌面图标模糊 | 已修复 | 2026-04-29 |
+| 10 | [启动时未归档图标不显示 / 截图后面板消失](startup_overlay_invisible_and_screenshot_recovery.md) | 启动时未归档图标有时不显示，偶尔截图后面板与未归档图标一起消失，必须切换前景窗口才出现 | 已修复 | 2026-04-29 |
 
 ## 常见问题说明
 
@@ -26,6 +27,7 @@
 2. 当桌面/任务栏是前台、又必须立即让窗口可见时，使用 `HWND_TOPMOST`；等前台变化时通过 `HWND_BOTTOM` 自动清除 topmost 状态（`HWND_BOTTOM` 隐含降级 topmost，无需单独 `HWND_NOTOPMOST`）
 3. 使用z-order恢复定时器，定期检查窗口是否可见，必要时进行恢复
 4. **`HWND_TOPMOST` 只用于"用户主动新建窗口"这类短暂场景**——如果在启动加载、`ToggleAllFences`、`DesktopIconOverlay` 等常规路径上也使用 topmost，会让 fence/overlay 一直浮动在普通应用之上，并连带破坏 Win+D 时桌面图标 overlay 的显示状态。修改全局 z-order 行为前先列出所有调用方
+5. **前台是桌面/任务栏时，z-order 自愈逻辑必须主动用 `HWND_TOPMOST` 拉回，而不是 return**——5 秒定时器与 `OnForegroundChanged` 桌面分支都应该这样做；topmost 由后续切到普通窗口时的 `HWND_BOTTOM` 自动降级清除
 
 ### 窗口样式限制
 Fence窗口使用`WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`样式，这种窗口有以下限制：

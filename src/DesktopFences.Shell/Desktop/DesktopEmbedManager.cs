@@ -68,16 +68,28 @@ public sealed class DesktopEmbedManager : IDisposable
             // Dispatch to UI thread to avoid cross-thread SetWindowPos races
             _dispatcher?.BeginInvoke(() =>
             {
-                // Only re-apply bottom z-order when not in topmost/peek/drag mode
-                if (!_isTopmost && !_isPeekActive && !_isDragging && _managedWindows.Count > 0)
+                if (_isTopmost || _isPeekActive || _isDragging || _pendingTopmost) return;
+                if (_managedWindows.Count == 0) return;
+
+                if (WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
                 {
-                    // Skip recovery when desktop is foreground — calling HWND_BOTTOM
-                    // in this state can push windows behind the desktop on Windows 11.
-                    if (!WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
+                    // 桌面/任务栏前台时，窗口可能已被 DWM 压到壁纸下。主动用 HWND_TOPMOST
+                    // 把它们拉回；不修改 _isTopmost——切到普通窗口时由
+                    // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
+                    foreach (var hwnd in _managedWindows)
                     {
-                        foreach (var hwnd in _managedWindows)
-                            SendToBottom(hwnd);
+                        if (!NativeMethods.IsWindowVisible(hwnd)) continue;
+                        NativeMethods.SetWindowPos(
+                            hwnd, NativeMethods.HWND_TOPMOST,
+                            0, 0, 0, 0,
+                            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
                     }
+                }
+                else
+                {
+                    foreach (var hwnd in _managedWindows)
+                        SendToBottom(hwnd);
                 }
             });
         };
@@ -96,18 +108,11 @@ public sealed class DesktopEmbedManager : IDisposable
 
         _managedWindows.Add(hwnd);
 
-        // 新创建的窗口：直接放置在桌面上方，确保立即可见
-        // 1. 先显示窗口
-        NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
-
-        // 2. 使用 HWND_TOP 确保在最上层（WS_EX_NOACTIVATE 保证不会干扰焦点）
-        NativeMethods.SetWindowPos(
-            hwnd, NativeMethods.HWND_TOP,
-            0, 0, 0, 0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-
-        // 3. 不要立即设置回 HWND_BOTTOM，让用户先看到窗口
-        // z-order 恢复定时器会在稍后处理
+        // Windows 11 上当前台是桌面/任务栏时，HWND_TOP 也会被 DWM 推到壁纸下；
+        // 复用 BringNewWindowToFront 的分支策略：桌面前台用 HWND_TOPMOST，
+        // 普通前台用 HWND_BOTTOM。topmost 状态在用户切到普通窗口时由
+        // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动清除。
+        BringNewWindowToFront(hwnd);
     }
 
     public void UnregisterWindow(IntPtr hwnd)
@@ -269,11 +274,23 @@ public sealed class DesktopEmbedManager : IDisposable
         }
         else
         {
-            // If the foreground is a desktop window, our windows at HWND_BOTTOM are already
-            // correctly positioned above it — no recovery needed. Calling SendToBottom when
-            // the desktop is foreground can push our windows behind the desktop on Windows 11.
+            // 前台变成桌面/任务栏（典型场景：截图工具关闭后前台立刻回到 Progman）。
+            // 此时窗口可能已经被 DWM 压到壁纸下，必须主动用 HWND_TOPMOST 把它们拉回。
+            // 不修改 _isTopmost——这是"借用 topmost"，由后续切到普通窗口时
+            // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
             if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
+            {
+                foreach (var w in _managedWindows)
+                {
+                    if (!NativeMethods.IsWindowVisible(w)) continue;
+                    NativeMethods.SetWindowPos(
+                        w, NativeMethods.HWND_TOPMOST,
+                        0, 0, 0, 0,
+                        NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                        NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+                }
                 return;
+            }
 
             // Debounce z-order recovery: wait 200ms to coalesce rapid foreground changes
             StartForegroundDebounce();
@@ -359,41 +376,36 @@ public sealed class DesktopEmbedManager : IDisposable
     /// <summary>
     /// Safely bring a window back and ensure it's visible above the desktop,
     /// even when the desktop is the foreground window.
+    ///
+    /// Windows 11 上当前台是桌面/任务栏时 HWND_TOP 也会被 DWM 推到壁纸下，
+    /// 因此桌面前台分支必须用 HWND_TOPMOST；普通窗口前台分支保持 HWND_BOTTOM。
+    /// 行为与 BringNewWindowToFront 一致——topmost 状态由后续 OnDebouncedForegroundRecovery
+    /// → SendToBottom(HWND_BOTTOM) 自动清除（HWND_BOTTOM 隐含降级 topmost）。
     /// </summary>
     public void EnsureVisibleAboveDesktop(IntPtr hwnd)
     {
-        // First, ensure the window is visible
         if (!NativeMethods.IsWindowVisible(hwnd))
         {
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
         }
 
-        // Now, a safe two-step approach to get above the desktop without
-        // getting stuck below it:
-        // 1. Temporarily bring to top (but don't activate) so we're definitely visible
-        // 2. Then carefully place below other windows but still above desktop
-
-        // Step 1: Bring to top temporarily
-        NativeMethods.SetWindowPos(
-            hwnd, NativeMethods.HWND_TOP,
-            0, 0, 0, 0,
-            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
-
-        // Step 2: Ask the z-order recovery to fix it up when it's safe
-        // We can also check if foreground is not desktop first, and if so, set bottom immediately
         var foreground = NativeMethods.GetForegroundWindow();
-        if (!WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
         {
-            // Safe to set bottom now
+            NativeMethods.SetWindowPos(
+                hwnd, NativeMethods.HWND_TOPMOST,
+                0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+        }
+        else
+        {
             NativeMethods.SetWindowPos(
                 hwnd, NativeMethods.HWND_BOTTOM,
                 0, 0, 0, 0,
                 NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
                 NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
         }
-        // If desktop IS foreground, we just leave it at HWND_TOP for now, and
-        // the z-order recovery timer will fix it when the foreground changes.
-        // HWND_TOP is okay - it's still below normal apps because of WS_EX_NOACTIVATE.
     }
 
     /// <summary>
