@@ -1,9 +1,10 @@
 // Fence component + file tile
 const { useState, useRef, useEffect, useCallback } = React;
 
-function FileTile({ file, fenceId, tabId, selected, onSelect, onContextMenu, onDragStart }) {
+function FileTile({ file, fenceId, tabId, selected, onSelect, onContextMenu, onDragStart, iconStyle }) {
   const info = iconFor(file);
   const [a, b] = ICON_COLORS[info.kind] || ICON_COLORS.txt;
+  const useSystem = iconStyle === 'system';
   return (
     <div
       className={"file" + (selected ? " selected" : "")}
@@ -13,9 +14,15 @@ function FileTile({ file, fenceId, tabId, selected, onSelect, onContextMenu, onD
       onDragStart={(e) => onDragStart(e, { file, fenceId, tabId })}
       title={file}
     >
-      <div className="ico" style={{background: `linear-gradient(135deg, ${a}, ${b})`}}>
-        {info.label}
-      </div>
+      {useSystem ? (
+        <div className="ico" style={{background: 'transparent', boxShadow: 'none'}}>
+          <SystemIcon kind={info.kind} label={info.label} size={Math.round(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--icon-size')) || 44)} />
+        </div>
+      ) : (
+        <div className="ico" style={{background: `linear-gradient(135deg, ${a}, ${b})`}}>
+          {info.label}
+        </div>
+      )}
       <div className="nm">{file}</div>
     </div>
   );
@@ -37,7 +44,7 @@ function Tab({ tab, idx, active, onClick, onClose, onContextMenu, canClose }) {
   );
 }
 
-function Fence({ fence, focused, onFocus, onUpdate, onContextMenu, onDropFile, onDragFile, onMergeInto, mergeTargetId }) {
+function Fence({ fence, focused, onFocus, onUpdate, onContextMenu, onDropFile, onDragFile, onMergeInto, mergeTargetId, iconStyle }) {
   const wrapRef = useRef(null);
   const [selected, setSelected] = useState(new Set());
   const [dropHover, setDropHover] = useState(false);
@@ -187,6 +194,7 @@ function Fence({ fence, focused, onFocus, onUpdate, onContextMenu, onDropFile, o
                 onSelect={handleSelect}
                 onContextMenu={onContextMenu}
                 onDragStart={onDragFile}
+                iconStyle={iconStyle}
               />
             ))}
           </div>

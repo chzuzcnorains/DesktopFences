@@ -761,6 +761,72 @@
   .sw-tabstyle-name { font-size: 12.5px; font-weight: 600; }
   .sw-tabstyle-desc { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
 
+  /* icon-style picker (large dual cards) */
+  .sw-iconstyle-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    padding: 4px 0 6px;
+  }
+  .sw-iconstyle-card {
+    background: rgba(0,0,0,0.18);
+    border: 1.5px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: default;
+    transition: border-color .12s, background .12s;
+    display: flex; flex-direction: column;
+  }
+  .sw-iconstyle-card:hover { border-color: rgba(255,255,255,0.16); }
+  .sw-iconstyle-card.active {
+    border-color: oklch(65% 0.16 var(--accent-hue, 248));
+    background: oklch(55% 0.16 var(--accent-hue, 248) / 0.10);
+  }
+  .sw-iconstyle-preview {
+    background:
+      radial-gradient(ellipse 80% 60% at 30% 20%, oklch(35% 0.06 248 / 0.6), transparent 60%),
+      linear-gradient(160deg, oklch(20% 0.04 240), oklch(14% 0.03 250));
+    padding: 22px 16px;
+    display: flex; gap: 14px;
+    align-items: center; justify-content: center;
+    min-height: 92px;
+  }
+  .sw-iconstyle-preview .ip-tile {
+    width: 42px; height: 42px;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    color: white; font-weight: 700; font-size: 14px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+    letter-spacing: 0.4px;
+  }
+  .sw-iconstyle-foot {
+    padding: 12px 14px;
+    display: flex; gap: 10px;
+    align-items: flex-start;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .sw-iconstyle-radio {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .sw-iconstyle-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    display: block;
+    position: relative;
+  }
+  .sw-iconstyle-dot.on {
+    border-color: oklch(70% 0.16 var(--accent-hue, 248));
+  }
+  .sw-iconstyle-dot.on::after {
+    content: ''; position: absolute; inset: 2px;
+    border-radius: 50%;
+    background: oklch(70% 0.16 var(--accent-hue, 248));
+  }
+  .sw-iconstyle-name { font-size: 13px; font-weight: 600; }
+  .sw-iconstyle-desc {
+    font-size: 11.5px; color: var(--text-dim);
+    margin-top: 3px; line-height: 1.5;
+  }
+
   /* rules */
   .sw-rules {
     display: grid; grid-template-columns: 280px 1fr;
@@ -1318,6 +1384,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script type="text/babel" src="src/data.jsx" data-plugins="transform-react-jsx-source" data-filename="src/data.jsx"></script>
+<script type="text/babel" src="src/system-icons.jsx" data-plugins="transform-react-jsx-source" data-filename="src/system-icons.jsx"></script>
 <script type="text/babel" src="src/fence.jsx" data-plugins="transform-react-jsx-source" data-filename="src/fence.jsx"></script>
 <script type="text/babel" src="src/app.jsx" data-plugins="transform-react-jsx-source" data-filename="src/app.jsx"></script>
 

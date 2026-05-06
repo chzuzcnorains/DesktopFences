@@ -354,6 +354,9 @@ function AppearancePane({ tweaks, setTweaks }) {
             </div>
             <div className="sw-mini-body">
               {['doc','xls','img','ps1','sql','pdf'].map((k,i) => {
+                if (tweaks.iconStyle === 'system') {
+                  return <SystemIcon key={i} kind={k} size={Math.round(tweaks.iconSize*0.8)} />;
+                }
                 const [a,b] = ICON_COLORS[k];
                 return <div key={i} className="sw-mini-ico" style={{background:`linear-gradient(135deg,${a},${b})`, width: tweaks.iconSize*0.7, height: tweaks.iconSize*0.7}}/>;
               })}
@@ -369,6 +372,54 @@ function AppearancePane({ tweaks, setTweaks }) {
                  style={{background: `oklch(65% 0.15 ${a.hue})`}}
                  onClick={() => set('accent', a.hue)}>
               {tweaks.accent === a.hue && <span>✓</span>}
+            </div>
+          ))}
+        </div>
+      </SwCard>
+
+      <SwCard title="文件图标" desc="切换 Fence 与桌面图标的渲染方式">
+        <div className="sw-iconstyle-grid">
+          {[
+            {
+              key: 'app',
+              name: '应用程序图标',
+              desc: '当前方案 — 彩色渐变方块 + 字母标识。紧凑、易扫读。',
+            },
+            {
+              key: 'system',
+              name: '系统原始图标',
+              desc: '使用 Windows 原生外观 — 折角文档、彩色徽章、图片缩略图。',
+            },
+          ].map(s => (
+            <div key={s.key}
+              className={"sw-iconstyle-card " + (tweaks.iconStyle === s.key ? 'active' : '')}
+              onClick={() => set('iconStyle', s.key)}>
+              <div className="sw-iconstyle-preview">
+                {s.key === 'app' ? (
+                  <>
+                    <div className="ip-tile" style={{background:'linear-gradient(135deg,#2b5cae,#4b7fd4)'}}>W</div>
+                    <div className="ip-tile" style={{background:'linear-gradient(135deg,#1e7d4a,#3aa76b)'}}>X</div>
+                    <div className="ip-tile" style={{background:'linear-gradient(135deg,#c02535,#e04a5a)', fontSize:11}}>PDF</div>
+                    <div className="ip-tile" style={{background:'linear-gradient(135deg,#c9a23f,#e5bf5a)', fontSize:11}}>DIR</div>
+                  </>
+                ) : (
+                  <>
+                    <SystemIcon kind="doc" size={42} />
+                    <SystemIcon kind="xls" size={42} />
+                    <SystemIcon kind="pdf" size={42} />
+                    <SystemIcon kind="folder" size={42} />
+                  </>
+                )}
+              </div>
+              <div className="sw-iconstyle-foot">
+                <div className="sw-iconstyle-radio">
+                  <span className={"sw-iconstyle-dot" + (tweaks.iconStyle === s.key ? ' on' : '')} />
+                </div>
+                <div>
+                  <div className="sw-iconstyle-name">{s.name}</div>
+                  <div className="sw-iconstyle-desc">{s.desc}</div>
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -774,7 +825,7 @@ function App() {
       const saved = localStorage.getItem('df_tweaks_v1');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
-    return { accent: 248, bgHue: 248, opacity: 0.55, blur: 26, iconSize: 44, tabStyle: 'flat' };
+    return { accent: 248, bgHue: 248, opacity: 0.55, blur: 26, iconSize: 44, tabStyle: 'flat', iconStyle: 'app' };
   });
   const [ctxMenu, setCtxMenu] = uS(null);
   const [rename, setRename] = uS(null);
@@ -919,10 +970,15 @@ function App() {
       const [a, b] = ICON_COLORS[n.kind] || ICON_COLORS.txt;
       const el = document.createElement('div');
       el.className = 'nat-icon';
-      el.innerHTML = `<div class="ic" style="background:linear-gradient(135deg,${a},${b})">${n.label}</div><div class="nm">${n.name}</div>`;
+      if (tweaks.iconStyle === 'system') {
+        const svg = window.systemIconHTML ? window.systemIconHTML(n.kind, n.label, 40) : '';
+        el.innerHTML = `<div class="ic" style="background:transparent;box-shadow:none">${svg}</div><div class="nm">${n.name}</div>`;
+      } else {
+        el.innerHTML = `<div class="ic" style="background:linear-gradient(135deg,${a},${b})">${n.label}</div><div class="nm">${n.name}</div>`;
+      }
       host.appendChild(el);
     });
-  }, []);
+  }, [tweaks.iconStyle]);
 
   // Double-click desktop = toggle hide
   uE(() => {
@@ -1105,6 +1161,7 @@ function App() {
           onContextMenu={onContextMenu}
           onDropFile={onDropFile}
           onDragFile={onDragFile}
+          iconStyle={tweaks.iconStyle}
         />
       ))}
       <TweaksPanel tweaks={tweaks} setTweaks={setTweaks} open={tweaksOpen} />
