@@ -76,15 +76,7 @@ public sealed class DesktopEmbedManager : IDisposable
                     // 桌面/任务栏前台时，窗口可能已被 DWM 压到壁纸下。主动用 HWND_TOPMOST
                     // 把它们拉回；不修改 _isTopmost——切到普通窗口时由
                     // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
-                    foreach (var hwnd in _managedWindows)
-                    {
-                        if (!NativeMethods.IsWindowVisible(hwnd)) continue;
-                        NativeMethods.SetWindowPos(
-                            hwnd, NativeMethods.HWND_TOPMOST,
-                            0, 0, 0, 0,
-                            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-                            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-                    }
+                    HoistAllAboveDesktop();
                 }
                 else
                 {
@@ -280,15 +272,7 @@ public sealed class DesktopEmbedManager : IDisposable
             // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
             if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
             {
-                foreach (var w in _managedWindows)
-                {
-                    if (!NativeMethods.IsWindowVisible(w)) continue;
-                    NativeMethods.SetWindowPos(
-                        w, NativeMethods.HWND_TOPMOST,
-                        0, 0, 0, 0,
-                        NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-                        NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-                }
+                HoistAllAboveDesktop();
                 return;
             }
 
@@ -374,6 +358,34 @@ public sealed class DesktopEmbedManager : IDisposable
     }
 
     /// <summary>
+    /// 把单个 hwnd 拉到 HWND_TOPMOST。"借用 topmost"模式：调用方不应修改 _isTopmost
+    /// 字段，而依赖后续 SendToBottom(HWND_BOTTOM) 隐式清除 topmost 状态。三个入口
+    /// （timer 自愈 / OnForegroundChanged 桌面分支 / EnsureVisibleAboveDesktop /
+    /// BringNewWindowToFront）共享此 SWP flag 组合。
+    /// </summary>
+    private static void HoistSingleAboveDesktop(IntPtr hwnd)
+    {
+        NativeMethods.SetWindowPos(
+            hwnd, NativeMethods.HWND_TOPMOST,
+            0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
+            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+    }
+
+    /// <summary>
+    /// 遍历 _managedWindows，对每个可见窗口调用 HoistSingleAboveDesktop。
+    /// timer 自愈 + OnForegroundChanged 桌面分支共享此实现。
+    /// </summary>
+    private void HoistAllAboveDesktop()
+    {
+        foreach (var hwnd in _managedWindows)
+        {
+            if (!NativeMethods.IsWindowVisible(hwnd)) continue;
+            HoistSingleAboveDesktop(hwnd);
+        }
+    }
+
+    /// <summary>
     /// Safely bring a window back and ensure it's visible above the desktop,
     /// even when the desktop is the foreground window.
     ///
@@ -392,11 +404,7 @@ public sealed class DesktopEmbedManager : IDisposable
         var foreground = NativeMethods.GetForegroundWindow();
         if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
         {
-            NativeMethods.SetWindowPos(
-                hwnd, NativeMethods.HWND_TOPMOST,
-                0, 0, 0, 0,
-                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            HoistSingleAboveDesktop(hwnd);
         }
         else
         {

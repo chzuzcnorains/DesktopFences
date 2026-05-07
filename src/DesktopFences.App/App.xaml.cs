@@ -744,16 +744,12 @@ public partial class App : Application
                 settings.DefaultTitleBarColor,
                 settings.DefaultTextColor,
                 settings.TitleBarFontSize);
-            host.SyncTabStripBackground();
-            host.SetTabStyle(settings.TabStyle);
+            ApplyHostStyle(host, settings);
             host.Panel.RefreshFileTileTemplate();
 
             // Update snap threshold on existing hosts
             host.SnapThreshold = settings.SnapThreshold;
             host.Panel.SnapThreshold = settings.SnapThreshold;
-
-            // Phase 11: live-update DWM Acrylic
-            host.SetAcrylicBlur(settings.FenceBlurEnabled);
         }
 
         _ = _layoutStore!.SaveSettingsAsync(settings);
@@ -1059,6 +1055,18 @@ public partial class App : Application
         RequestAutoSave();
     }
 
+    /// <summary>
+    /// 把 AppSettings 的 host 级别外观（tab strip 背景同步、tab style、DWM 模糊）
+    /// 推送到一个 FenceHost 实例。新建 host (SpawnFenceWindow / DetachTab) 与
+    /// 设置变更 (OnSettingsSaved) 三条路径共用此 helper，避免漏改某一处。
+    /// </summary>
+    private static void ApplyHostStyle(FenceHost host, AppSettings settings)
+    {
+        host.SyncTabStripBackground();
+        host.SetTabStyle(settings.TabStyle);
+        host.SetAcrylicBlur(settings.FenceBlurEnabled);
+    }
+
     private void SpawnFenceWindow(FencePanelViewModel vm, bool bringToFront = false)
     {
         // Clamp fence position to visible screen area to prevent off-screen windows
@@ -1102,11 +1110,7 @@ public partial class App : Application
             _appSettings.DefaultTitleBarColor,
             _appSettings.DefaultTextColor,
             _appSettings.TitleBarFontSize);
-        host.SyncTabStripBackground();
-        host.SetTabStyle(_appSettings.TabStyle);
-
-        // Phase 11: enable DWM Acrylic per current settings
-        host.SetAcrylicBlur(_appSettings.FenceBlurEnabled);
+        ApplyHostStyle(host, _appSettings);
 
         host.Panel.LoadAllIcons();
 
@@ -1302,11 +1306,7 @@ public partial class App : Application
             _appSettings.DefaultTitleBarColor,
             _appSettings.DefaultTextColor,
             _appSettings.TitleBarFontSize);
-        newHost.SyncTabStripBackground();
-        newHost.SetTabStyle(_appSettings.TabStyle);
-
-        // Phase 11: enable DWM Acrylic per current settings
-        newHost.SetAcrylicBlur(_appSettings.FenceBlurEnabled);
+        ApplyHostStyle(newHost, _appSettings);
 
         newHost.Panel.LoadAllIcons();
         RequestAutoSave();
