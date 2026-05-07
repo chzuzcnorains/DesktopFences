@@ -16,3 +16,5 @@
 - [Phase 9c: 图标系统](phase-9c.md) ✅
 - [Phase 10: 视觉系统升级](phase-10.md) ✅
 - [Phase 11: DWM Acrylic 背景模糊](phase-11.md) ✅
+- [Phase 12: iconStyle 双卡片选择器 + System 图标资源](phase-12.md) ✅
+- [Phase 13: 按 Fence 覆盖 IconStyle](phase-13.md) ✅
