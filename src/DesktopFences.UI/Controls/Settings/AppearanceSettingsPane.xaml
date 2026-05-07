@@ -135,25 +135,18 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 模糊强度 -->
+                <!-- 背景模糊 -->
                 <Border Style="{StaticResource SwCardStyle}" Padding="16" Margin="0,0,0,12">
                     <StackPanel>
-                        <Grid>
-                            <TextBlock Text="模糊强度 · Blur"
-                                       Style="{StaticResource SwSectionHeaderStyle}" />
-                            <TextBlock x:Name="BlurValueLabel"
-                                       Text="26 px"
-                                       Style="{StaticResource ValueLabelStyle}"
-                                       HorizontalAlignment="Right" />
-                        </Grid>
-                        <TextBlock Text="近似 CSS backdrop-filter，控制 Fence 阴影柔和度（WPF DropShadow 模拟）。"
+                        <TextBlock Text="背景模糊 · Blur"
+                                   Style="{StaticResource SwSectionHeaderStyle}" />
+                        <TextBlock Text="启用 DWM 背景毛玻璃效果，让 Fence 透出桌面的模糊像素。"
                                    Style="{StaticResource CardSubtitleStyle}" />
-                        <Slider x:Name="BlurSlider"
-                                Style="{DynamicResource DarkSliderStyle}"
-                                Minimum="0" Maximum="60"
-                                TickFrequency="5"
-                                IsSnapToTickEnabled="True"
-                                ValueChanged="OnControlChanged" />
+                        <CheckBox x:Name="BlurEnabledCheckBox"
+                                  Content="启用背景模糊"
+                                  Style="{DynamicResource DarkCheckBoxStyle}"
+                                  Checked="OnBlurEnabledChanged"
+                                  Unchecked="OnBlurEnabledChanged" />
                     </StackPanel>
                 </Border>
 

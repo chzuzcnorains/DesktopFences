@@ -8,7 +8,7 @@ namespace DesktopFences.UI.Controls.Settings;
 /// <summary>
 /// Mini-fence preview rendered inside the Appearance settings pane.
 /// Apply(AppSettings) re-renders the strip + tiles so the user can see
-/// AccentColor / FenceBgHue / FenceOpacity / FenceBlurRadius / IconSize / TabStyle
+/// AccentColor / FenceBgHue / FenceOpacity / FenceBlurEnabled / IconSize / TabStyle
 /// react in real time before clicking Save.
 /// </summary>
 public partial class FencePreviewControl : UserControl
@@ -36,7 +36,7 @@ public partial class FencePreviewControl : UserControl
     {
         var hue     = Clamp(s.FenceBgHue, 0, 360);
         var opacity = Clamp(s.FenceOpacity, 0.20, 0.90);
-        var blur    = Clamp(s.FenceBlurRadius, 0, 60);
+        var blur    = s.FenceBlurEnabled ? 26 : 0;
         var icon    = Clamp(s.IconSize, 28, 64);
         var accent  = TryParseColor(s.AccentColor, Color.FromRgb(0x7A, 0xA7, 0xE6));
 

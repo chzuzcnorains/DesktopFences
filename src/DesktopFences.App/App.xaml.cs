@@ -752,8 +752,8 @@ public partial class App : Application
             host.SnapThreshold = settings.SnapThreshold;
             host.Panel.SnapThreshold = settings.SnapThreshold;
 
-            // Phase 11: live-update DWM Acrylic from FenceBlurRadius
-            host.SetAcrylicBlur(settings.FenceBlurRadius);
+            // Phase 11: live-update DWM Acrylic
+            host.SetAcrylicBlur(settings.FenceBlurEnabled);
         }
 
         _ = _layoutStore!.SaveSettingsAsync(settings);
@@ -784,13 +784,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Apply FenceBlurRadius to the global FenceShadowEffect resource. FencePanel.xaml
-    /// references this via DynamicResource so existing fences pick up the new shadow live.
-    /// blur=0 disables the shadow (Opacity=0).
+    /// Apply the edge DropShadow that complements DWM blur. FencePanel.xaml references
+    /// this via DynamicResource so existing fences pick up the new shadow live.
+    /// FenceBlurEnabled=false disables the shadow entirely; when enabled, uses the
+    /// legacy 26-px radius (the prior default of FenceBlurRadius before it became binary).
     /// </summary>
     private void ApplyFenceShadow(AppSettings settings)
     {
-        var blur = Math.Max(0, Math.Min(60, settings.FenceBlurRadius));
+        var blur = settings.FenceBlurEnabled ? 26 : 0;
         Resources["FenceShadowEffect"] = new System.Windows.Media.Effects.DropShadowEffect
         {
             BlurRadius = blur,
@@ -1104,8 +1105,8 @@ public partial class App : Application
         host.SyncTabStripBackground();
         host.SetTabStyle(_appSettings.TabStyle);
 
-        // Phase 11: enable DWM Acrylic per current FenceBlurRadius
-        host.SetAcrylicBlur(_appSettings.FenceBlurRadius);
+        // Phase 11: enable DWM Acrylic per current settings
+        host.SetAcrylicBlur(_appSettings.FenceBlurEnabled);
 
         host.Panel.LoadAllIcons();
 
@@ -1304,8 +1305,8 @@ public partial class App : Application
         newHost.SyncTabStripBackground();
         newHost.SetTabStyle(_appSettings.TabStyle);
 
-        // Phase 11: enable DWM Acrylic per current FenceBlurRadius
-        newHost.SetAcrylicBlur(_appSettings.FenceBlurRadius);
+        // Phase 11: enable DWM Acrylic per current settings
+        newHost.SetAcrylicBlur(_appSettings.FenceBlurEnabled);
 
         newHost.Panel.LoadAllIcons();
         RequestAutoSave();

@@ -24,7 +24,7 @@ public partial class FenceHost : Window
     private TabStyle _tabStyle = TabStyle.Flat;
     private bool _isMovingOrSizing;
     private SnapGuideOverlay? _snapGuideOverlay;
-    private int _acrylicBlur;
+    private bool _acrylicBlurEnabled;
 
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
@@ -423,7 +423,7 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         hwndSource?.AddHook(WndProc);
 
         // Phase 11: apply DWM Acrylic if requested (set via SetAcrylicBlur before Show()).
-        if (_acrylicBlur > 0)
+        if (_acrylicBlurEnabled)
             AcrylicCompositor.Enable(helper.Handle);
 
         // BlurBehind paints the entire window rect — clip it to a rounded region
@@ -437,16 +437,16 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     }
 
     /// <summary>
-    /// Phase 11: enable/disable DWM Acrylic blur-behind based on FenceBlurRadius.
-    /// Safe to call before or after the window's hwnd is created — applied lazily
-    /// in OnLoaded if the handle is not yet available.
+    /// Phase 11: enable/disable DWM Acrylic blur-behind. Safe to call before or
+    /// after the window's hwnd is created — applied lazily in OnLoaded if the
+    /// handle is not yet available.
     /// </summary>
-    public void SetAcrylicBlur(int blur)
+    public void SetAcrylicBlur(bool enabled)
     {
-        _acrylicBlur = blur;
+        _acrylicBlurEnabled = enabled;
         var helper = new WindowInteropHelper(this);
         if (helper.Handle == IntPtr.Zero) return;
-        if (blur > 0)
+        if (enabled)
             AcrylicCompositor.Enable(helper.Handle);
         else
             AcrylicCompositor.Disable(helper.Handle);

@@ -21,7 +21,7 @@ public enum FileIconStyle
 /// <summary>
 /// Global application settings, persisted to settings.json.
 /// </summary>
-public class AppSettings
+public class AppSettings : IJsonOnDeserialized
 {
     // Appearance
     public string DefaultFenceColor { get; set; } = "#CC1E1E2E";
@@ -89,11 +89,21 @@ public class AppSettings
     public double FenceOpacity { get; set; } = 0.85;
 
     /// <summary>
-    /// Fence shadow blur radius (0 – 60 px). Drives the soft drop shadow under
-    /// each fence panel; 0 disables it. WPF's DropShadowEffect approximates
-    /// the CSS backdrop-filter blur from the v2 prototype.
+    /// Legacy int field from before blur was a binary toggle. Only consulted
+    /// during deserialization; <see cref="OnDeserialized"/> migrates the value
+    /// into <see cref="FenceBlurEnabled"/> and clears this field so subsequent
+    /// serialization no longer emits it.
     /// </summary>
-    public int FenceBlurRadius { get; set; } = 26;
+    [JsonPropertyName("FenceBlurRadius")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int? FenceBlurRadiusLegacy { get; set; }
+
+    /// <summary>
+    /// Whether DWM background blur is enabled on Fence windows. Default true:
+    /// the legacy <c>FenceBlurRadius</c> defaulted to 26 (blur on), so old
+    /// users see no behavior change after upgrade.
+    /// </summary>
+    public bool FenceBlurEnabled { get; set; } = true;
 
     /// <summary>
     /// FIFO of recently-closed fences (FenceDefinition serialized as JSON).
@@ -131,4 +141,18 @@ public class AppSettings
     /// Whether to automatically scan the desktop every 2 seconds and classify files.
     /// </summary>
     public bool AutoOrganizeEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Migrate the legacy <c>FenceBlurRadius</c> int field (any positive value
+    /// meant "blur on") into <see cref="FenceBlurEnabled"/>, then null out the
+    /// legacy field so it is omitted from subsequent serialization.
+    /// </summary>
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        if (FenceBlurRadiusLegacy is { } legacy)
+        {
+            FenceBlurEnabled = legacy > 0;
+            FenceBlurRadiusLegacy = null;
+        }
+    }
 }

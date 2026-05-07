@@ -65,7 +65,7 @@ public partial class AppearanceSettingsPane : UserControl
 
         HueSlider.Value      = Math.Max(0, Math.Min(360, s.FenceBgHue));
         OpacitySlider.Value  = Math.Max(0.20, Math.Min(0.90, s.FenceOpacity));
-        BlurSlider.Value     = Math.Max(0, Math.Min(60, s.FenceBlurRadius));
+        BlurEnabledCheckBox.IsChecked = s.FenceBlurEnabled;
         IconSizeSlider.Value = Math.Max(28, Math.Min(64, s.IconSize));
 
         RefreshSwatchSelection();
@@ -79,13 +79,13 @@ public partial class AppearanceSettingsPane : UserControl
 
     public void Save(AppSettings s)
     {
-        s.AccentColor     = _accentColor;
-        s.TabStyle        = _tabStyle;
-        s.IconStyle       = _iconStyle;
-        s.FenceBgHue      = (int)Math.Round(HueSlider.Value);
-        s.FenceOpacity    = Math.Round(OpacitySlider.Value, 2);
-        s.FenceBlurRadius = (int)Math.Round(BlurSlider.Value);
-        s.IconSize        = (int)Math.Round(IconSizeSlider.Value);
+        s.AccentColor      = _accentColor;
+        s.TabStyle         = _tabStyle;
+        s.IconStyle        = _iconStyle;
+        s.FenceBgHue       = (int)Math.Round(HueSlider.Value);
+        s.FenceOpacity     = Math.Round(OpacitySlider.Value, 2);
+        s.FenceBlurEnabled = BlurEnabledCheckBox.IsChecked == true;
+        s.IconSize         = (int)Math.Round(IconSizeSlider.Value);
     }
 
     // ── Swatches ─────────────────────────────────────────────
@@ -245,7 +245,7 @@ public partial class AppearanceSettingsPane : UserControl
     private void OnControlChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         // XAML 解析阶段，Slider 的 Min/Max 设置会触发 Value 协调并触发 ValueChanged，
-        // 但此时后续 x:Name 字段（如 BlurValueLabel）尚未注入。等到 EndInit 才能安全访问。
+        // 但此时后续 x:Name 字段尚未注入。等到 EndInit 才能安全访问。
         if (!IsInitialized) return;
 
         RefreshValueLabels();
@@ -257,18 +257,23 @@ public partial class AppearanceSettingsPane : UserControl
     {
         HueValueLabel.Text      = $"h={(int)Math.Round(HueSlider.Value)}°";
         OpacityValueLabel.Text  = $"{(int)Math.Round(OpacitySlider.Value * 100)}%";
-        BlurValueLabel.Text     = $"{(int)Math.Round(BlurSlider.Value)} px";
         IconSizeValueLabel.Text = $"{(int)Math.Round(IconSizeSlider.Value)} px";
+    }
+
+    private void OnBlurEnabledChanged(object sender, RoutedEventArgs e)
+    {
+        if (_suppressEvents) return;
+        Preview.Apply(BuildSnapshot());
     }
 
     private AppSettings BuildSnapshot() => new()
     {
-        AccentColor     = _accentColor,
-        TabStyle        = _tabStyle,
-        IconStyle       = _iconStyle,
-        FenceBgHue      = (int)Math.Round(HueSlider.Value),
-        FenceOpacity    = OpacitySlider.Value,
-        FenceBlurRadius = (int)Math.Round(BlurSlider.Value),
-        IconSize        = (int)Math.Round(IconSizeSlider.Value),
+        AccentColor      = _accentColor,
+        TabStyle         = _tabStyle,
+        IconStyle        = _iconStyle,
+        FenceBgHue       = (int)Math.Round(HueSlider.Value),
+        FenceOpacity     = OpacitySlider.Value,
+        FenceBlurEnabled = BlurEnabledCheckBox.IsChecked == true,
+        IconSize         = (int)Math.Round(IconSizeSlider.Value),
     };
 }

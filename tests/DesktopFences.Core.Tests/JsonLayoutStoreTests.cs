@@ -155,6 +155,47 @@ public class JsonLayoutStoreTests : IDisposable
         Assert.Equal(FileIconStyle.System, loaded[0].IconStyleOverride);
     }
 
+    [Fact]
+    public async Task AppSettings_LegacyFenceBlurRadius_NonZero_MigratesToBlurEnabled()
+    {
+        // 模拟 Phase 11 之前的 settings.json：仅有 int FenceBlurRadius 字段
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(settingsPath, """{ "FenceBlurRadius": 26 }""");
+
+        var loaded = await _store.LoadSettingsAsync();
+
+        Assert.True(loaded.FenceBlurEnabled);
+    }
+
+    [Fact]
+    public async Task AppSettings_LegacyFenceBlurRadius_Zero_MigratesToBlurDisabled()
+    {
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(settingsPath, """{ "FenceBlurRadius": 0 }""");
+
+        var loaded = await _store.LoadSettingsAsync();
+
+        Assert.False(loaded.FenceBlurEnabled);
+    }
+
+    [Fact]
+    public async Task AppSettings_RoundTrip_DoesNotEmitLegacyFenceBlurRadius()
+    {
+        // 旧 JSON 触发迁移 → Save 重写 → 文件中不应再出现 FenceBlurRadius 键
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(settingsPath, """{ "FenceBlurRadius": 26 }""");
+
+        var loaded = await _store.LoadSettingsAsync();
+        await _store.SaveSettingsAsync(loaded);
+
+        var rewritten = await File.ReadAllTextAsync(settingsPath);
+        Assert.DoesNotContain("FenceBlurRadius", rewritten);
+        Assert.Contains("FenceBlurEnabled", rewritten);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_tempDir, true); }
