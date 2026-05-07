@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using DesktopFences.Shell.Interop;
 
@@ -19,23 +20,28 @@ namespace DesktopFences.Shell.Desktop;
 public static class AcrylicCompositor
 {
     /// <summary>
-    /// Enable DWM blur-behind on the given window. <paramref name="gradientArgb"/>
-    /// is forwarded to the AccentPolicy but is unused under BlurBehind — kept for
-    /// API symmetry with the older Acrylic call sites.
+    /// Enable DWM blur-behind on the given window. Returns <c>true</c> on success;
+    /// <c>false</c> when the hwnd is invalid or the underlying private API rejects
+    /// the call (unsupported Windows build, hwnd belongs to another process, etc.).
+    /// On failure the caller should leave the WPF FenceBorder background opaque so
+    /// the fence remains visible without DWM blur.
+    /// <paramref name="gradientArgb"/> is forwarded to the AccentPolicy but is
+    /// unused under BlurBehind — kept for API symmetry with older Acrylic call sites.
     /// </summary>
-    public static void Enable(IntPtr hwnd, uint gradientArgb = 0x00000000)
+    public static bool Enable(IntPtr hwnd, uint gradientArgb = 0x00000000)
     {
-        if (hwnd == IntPtr.Zero) return;
-        ApplyAccent(hwnd, NativeMethods.AccentState.ACCENT_ENABLE_BLURBEHIND, gradientArgb);
+        if (hwnd == IntPtr.Zero) return false;
+        return ApplyAccent(hwnd, NativeMethods.AccentState.ACCENT_ENABLE_BLURBEHIND, gradientArgb);
     }
 
     /// <summary>
-    /// Disable blur-behind. Restores normal compositing.
+    /// Disable blur-behind. Restores normal compositing. Returns <c>true</c> on
+    /// success; failure is non-fatal (the hwnd may already be in the disabled state).
     /// </summary>
-    public static void Disable(IntPtr hwnd)
+    public static bool Disable(IntPtr hwnd)
     {
-        if (hwnd == IntPtr.Zero) return;
-        ApplyAccent(hwnd, NativeMethods.AccentState.ACCENT_DISABLED, 0);
+        if (hwnd == IntPtr.Zero) return false;
+        return ApplyAccent(hwnd, NativeMethods.AccentState.ACCENT_DISABLED, 0);
     }
 
     /// <summary>
@@ -65,7 +71,7 @@ public static class AcrylicCompositor
         NativeMethods.SetWindowRgn(hwnd, IntPtr.Zero, true);
     }
 
-    private static void ApplyAccent(IntPtr hwnd, NativeMethods.AccentState state, uint gradientArgb)
+    private static bool ApplyAccent(IntPtr hwnd, NativeMethods.AccentState state, uint gradientArgb)
     {
         var policy = new NativeMethods.AccentPolicy
         {
@@ -86,7 +92,15 @@ public static class AcrylicCompositor
                 SizeOfData = size,
                 Data = ptr,
             };
-            NativeMethods.SetWindowCompositionAttribute(hwnd, ref data);
+            // Private API; treat any non-zero return as success (Win32 convention).
+            // Zero means the call was rejected — log so failures aren't silent.
+            var rc = NativeMethods.SetWindowCompositionAttribute(hwnd, ref data);
+            if (rc == 0)
+            {
+                Debug.WriteLine($"[AcrylicCompositor] SetWindowCompositionAttribute failed for state={state}, hwnd=0x{hwnd.ToInt64():X}");
+                return false;
+            }
+            return true;
         }
         finally
         {

@@ -25,6 +25,7 @@ public partial class FenceHost : Window
     private bool _isMovingOrSizing;
     private SnapGuideOverlay? _snapGuideOverlay;
     private bool _acrylicBlurEnabled;
+    private bool _acrylicBlurApplied;
 
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
@@ -424,11 +425,13 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
 
         // Phase 11: apply DWM Acrylic if requested (set via SetAcrylicBlur before Show()).
         if (_acrylicBlurEnabled)
-            AcrylicCompositor.Enable(helper.Handle);
+            _acrylicBlurApplied = AcrylicCompositor.Enable(helper.Handle);
 
         // BlurBehind paints the entire window rect — clip it to a rounded region
-        // so the corners outside FenceBorder.CornerRadius don't leak blur.
-        // Re-applied on every SizeChanged so it tracks resize / rollup animations.
+        // so the corners outside FenceBorder.CornerRadius don't leak blur. When blur
+        // is off (or the private API failed) the WPF transparent corners already
+        // hide the rect — leaving the region rectangular avoids the "rounded but
+        // empty corner" visual glitch. Re-applied on SizeChanged for resize/rollup.
         ApplyWindowRoundedRegion();
         SizeChanged += (_, _) => ApplyWindowRoundedRegion();
 
@@ -445,23 +448,35 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
     {
         _acrylicBlurEnabled = enabled;
         var helper = new WindowInteropHelper(this);
-        if (helper.Handle == IntPtr.Zero) return;
+        if (helper.Handle == IntPtr.Zero) { _acrylicBlurApplied = false; return; }
         if (enabled)
-            AcrylicCompositor.Enable(helper.Handle);
+        {
+            _acrylicBlurApplied = AcrylicCompositor.Enable(helper.Handle);
+        }
         else
+        {
             AcrylicCompositor.Disable(helper.Handle);
+            _acrylicBlurApplied = false;
+        }
         ApplyWindowRoundedRegion();
     }
 
     /// <summary>
     /// Push a rounded-rect region into the window so DWM blur respects the
-    /// FenceBorder's CornerRadius. Always safe to call — no-op when hwnd or
-    /// dimensions aren't ready yet. Corner radius matches FenceBorderStyle (10 DIP).
+    /// FenceBorder's CornerRadius. Only applied when blur is actually active
+    /// (<c>_acrylicBlurApplied</c>); otherwise the region is cleared so the
+    /// WPF transparent corners alone shape the visible fence. Corner radius
+    /// matches FenceBorderStyle (10 DIP).
     /// </summary>
     private void ApplyWindowRoundedRegion()
     {
         var helper = new WindowInteropHelper(this);
         if (helper.Handle == IntPtr.Zero) return;
+        if (!_acrylicBlurApplied)
+        {
+            AcrylicCompositor.ClearRegion(helper.Handle);
+            return;
+        }
         var dpi = VisualTreeHelper.GetDpi(this);
         int w = (int)Math.Round(ActualWidth  * dpi.DpiScaleX);
         int h = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
