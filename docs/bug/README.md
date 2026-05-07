@@ -16,6 +16,9 @@
 | 8 | [滚动条样式与暗色设计不匹配](scrollbar_native_style.md) | 滚动条都是 Windows 原生灰白滚动条（带上下箭头按钮），与项目整体暗色 UI 风格严重不协调| 已修复 | 2026-04-29 |
 | 9 | [未归档icon显示模糊](icon_blurry.md) | 未归档的桌面图标显示不够锐利，比Windows 11原生桌面图标模糊 | 已修复 | 2026-04-29 |
 | 10 | [启动时未归档图标不显示 / 截图后面板消失](startup_overlay_invisible_and_screenshot_recovery.md) | 启动时未归档图标有时不显示，偶尔截图后面板与未归档图标一起消失，必须切换前景窗口才出现 | 已修复 | 2026-04-29 |
+| 11 | [切换图标风格后已显示的 tile 不刷新](icon_style_switch_no_refresh.md) | 外观设置切 App ↔ System 风格保存后，已渲染的文件 tile 不切模板，必须重启或刷新数据才生效 | 已修复 | 2026-05-07 |
+| 12 | [模糊强度 > 0 时颜色/透明度调整失效](acrylic_masks_color_opacity.md) | 设置模糊强度后，背景色调和透明度滑块完全不生效，fence 始终是灰白磨砂玻璃；Acrylic 在 Win11 22H2+ 加了 luminosity tint 层覆盖 WPF 背景 | 已修复 | 2026-05-07 |
+| 13 | [设置模糊强度后 panel 圆角丢失](blur_corners_squared.md) | 启用 BlurBehind 后 fence 四个圆角变方，因为 DWM blur 早于 WPF 渲染，WPF 的 CornerRadius 截断不了；用 SetWindowRgn 给窗口本身设圆角剪裁区域解决 | 已修复 | 2026-05-07 |
 
 ## 常见问题说明
 

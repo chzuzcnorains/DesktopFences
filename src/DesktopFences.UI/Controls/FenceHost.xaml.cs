@@ -426,6 +426,12 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         if (_acrylicBlur > 0)
             AcrylicCompositor.Enable(helper.Handle);
 
+        // BlurBehind paints the entire window rect — clip it to a rounded region
+        // so the corners outside FenceBorder.CornerRadius don't leak blur.
+        // Re-applied on every SizeChanged so it tracks resize / rollup animations.
+        ApplyWindowRoundedRegion();
+        SizeChanged += (_, _) => ApplyWindowRoundedRegion();
+
         // Fade-in animation on create
         FenceContent.AnimateFadeIn();
     }
@@ -444,6 +450,23 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             AcrylicCompositor.Enable(helper.Handle);
         else
             AcrylicCompositor.Disable(helper.Handle);
+        ApplyWindowRoundedRegion();
+    }
+
+    /// <summary>
+    /// Push a rounded-rect region into the window so DWM blur respects the
+    /// FenceBorder's CornerRadius. Always safe to call — no-op when hwnd or
+    /// dimensions aren't ready yet. Corner radius matches FenceBorderStyle (10 DIP).
+    /// </summary>
+    private void ApplyWindowRoundedRegion()
+    {
+        var helper = new WindowInteropHelper(this);
+        if (helper.Handle == IntPtr.Zero) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int w = (int)Math.Round(ActualWidth  * dpi.DpiScaleX);
+        int h = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+        int radius = (int)Math.Round(10 * dpi.DpiScaleX);
+        AcrylicCompositor.ApplyRoundedRegion(helper.Handle, w, h, radius);
     }
 
     private void OnClosed(object? sender, EventArgs e)
