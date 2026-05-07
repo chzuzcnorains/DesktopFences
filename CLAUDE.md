@@ -90,5 +90,5 @@ DesktopFences.Core   → 纯 C# 模型、规则引擎、布局持久化（无 UI
 
 ## 当前开发阶段
 
-**Phase 0-13 全部完成（63 个单元测试通过）。** 
+**Phase 0-13 + Phase 11 Polish 全部完成（66 个单元测试通过）。** 
 

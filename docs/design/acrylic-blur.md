@@ -26,7 +26,7 @@
 ```csharp
 public enum AccentState
 {
-    ACCENT_DISABLED = 0,                  // 关闭 blur — FenceBlurRadius==0 时使用
+    ACCENT_DISABLED = 0,                  // 关闭 blur — FenceBlurEnabled=false 时使用
     ACCENT_ENABLE_GRADIENT = 1,
     ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
     ACCENT_ENABLE_BLURBEHIND = 3,         // 选定 — Aero Glass blur,无 luminosity tint 层
@@ -53,19 +53,19 @@ ABGR 32 位(注意不是 ARGB):
 
 ## 4. 行为表
 
-| `FenceBlurRadius` | DWM 动作 | DropShadow Opacity |
+| `FenceBlurEnabled` | DWM 动作 | DropShadow Opacity |
 |---|---|---|
-| 0 | `ACCENT_DISABLED` — 关闭 blur | 0(关闭) |
-| 1–60 | `ACCENT_ENABLE_BLURBEHIND` + `AccentFlags=0` + `GradientColor=0x00000000` | 0.45(沿用 Phase 10 公式) |
+| `false` | `ACCENT_DISABLED` — 关闭 blur | 0(关闭) |
+| `true` | `ACCENT_ENABLE_BLURBEHIND` + `AccentFlags=0` + `GradientColor=0x00000000` | 0.45(沿用 Phase 10 公式),DropShadow 半径固定 26 px |
 
-注意:DWM 内部 BlurBehind 模糊核大小**不可由用户控制**(系统约 12-16 像素,比 Acrylic 的 ~30 像素弱),因此 1 与 60 在"模糊强度"维度无视觉差。1–60 之间的差异通过 DropShadow 半径承担(给阴影更软的边缘)。
+注意:DWM 内部 BlurBehind 模糊核大小**不可由用户控制**(系统约 12-16 像素,比 Acrylic 的 ~30 像素弱),因此底层 API 是二值开关 — 早先 `FenceBlurRadius:int(0..60)` 滑块在 1..60 之间拖动视觉无任何差异,polish 阶段已替换为 `FenceBlurEnabled:bool` + CheckBox。`AppSettings.IJsonOnDeserialized` 自动迁移老 JSON(任意正数 → `true`,0 → `false`)。
 
 ## 5. 调用时机
 
 | 时机 | 处理 |
 |---|---|
-| `FenceHost.OnLoaded` | 拿到 hwnd → 若启动设置中 `FenceBlurRadius>0` 调 `AcrylicCompositor.Enable`,否则 `Disable` |
-| `App.OnSettingsSaved` | 遍历 `_fenceWindows`,每个 host 调 `host.SetAcrylicBlur(settings.FenceBlurRadius)` 实时生效 |
+| `FenceHost.OnLoaded` | 拿到 hwnd → 若 `_acrylicBlurEnabled` 调 `AcrylicCompositor.Enable`,接收 bool 返回值存入 `_acrylicBlurApplied` |
+| `App.OnSettingsSaved` / `SpawnFenceWindow` / `DetachTab` | 调用 `ApplyHostStyle(host, settings)` 私有 helper,helper 内部 `host.SetAcrylicBlur(settings.FenceBlurEnabled)` 实时生效 |
 | `App.LoadFencesAsync` 创建第一个 fence 之前 | 通过 `ApplyFenceShadow` 设置 DropShadow,Acrylic 由 host.OnLoaded 自行处理(不需 App 层提前推) |
 
 ## 6. 与桌面嵌入(Phase 0)的兼容性
@@ -88,20 +88,20 @@ SetWindowRgn(hwnd, hRgn, true); // 接管 hRgn 所有权
 
 `FenceHost.OnLoaded` 中挂 `SizeChanged += ApplyWindowRoundedRegion`,resize / rollup 动画都跟着更新。region 的尺寸/半径必须乘 `VisualTreeHelper.GetDpi(this).DpiScaleX/Y` 转成物理像素,否则高 DPI 下 region 偏小露出窗口边缘。
 
-无论 `FenceBlurRadius` 是否 > 0 都应用 region(blur 关时也无害),保证视觉一致。
+`ApplyWindowRoundedRegion` 仅在 `_acrylicBlurApplied=true` 时调 `ApplyRoundedRegion` 裁圆角;blur 关闭或 API 失败时调 `ClearRegion` 保持矩形窗口 —— WPF 透明角已让 fence 视觉上是圆角,无须 SetWindowRgn,且能避免"裁了圆角但角落看不到 blur"的视觉怪象。
 
 ## 7. 实现位置一览
 
 | 文件 | 内容 |
 |---|---|
 | `Shell/Interop/NativeMethods.cs` | `SetWindowCompositionAttribute` P/Invoke + `AccentState / AccentPolicy / WindowCompositionAttributeData / WindowCompositionAttribute`;`SetWindowRgn` / `CreateRoundRectRgn` / `DeleteObject` |
-| `Shell/Desktop/AcrylicCompositor.cs` | `static class` — `Enable(hwnd, gradientArgb)` / `Disable(hwnd)` / `ApplyRoundedRegion(hwnd, w, h, radius)` / `ClearRegion(hwnd)`(类名沿用 Phase 11,内部已切 BlurBehind + 圆角 region) |
-| `UI/Controls/FenceHost.xaml.cs` | `OnLoaded` 中应用 blur + 挂 `SizeChanged` 同步 region;`SetAcrylicBlur(int)` / `ApplyWindowRoundedRegion()` |
-| `App.xaml.cs` | `OnSettingsSaved` 遍历 `_fenceWindows.SetAcrylicBlur` |
+| `Shell/Desktop/AcrylicCompositor.cs` | `static class` — `Enable(hwnd, gradientArgb): bool` / `Disable(hwnd): bool` / `ApplyRoundedRegion(hwnd, w, h, radius)` / `ClearRegion(hwnd)`(类名沿用 Phase 11,内部已切 BlurBehind + 圆角 region;Enable/Disable 返回 bool 让调用方感知 API 失败) |
+| `UI/Controls/FenceHost.xaml.cs` | `OnLoaded` 中应用 blur + 挂 `SizeChanged` 同步 region;`SetAcrylicBlur(bool)` / `ApplyWindowRoundedRegion()`;字段 `_acrylicBlurEnabled`(用户意图) + `_acrylicBlurApplied`(实际状态) |
+| `App.xaml.cs` | `ApplyHostStyle(host, settings)` 静态私有 helper 集中三处 host 初始化(`SpawnFenceWindow` / `DetachTab` / `OnSettingsSaved`) |
 
 ## 8. 局限性
 
-- **不支持自定义模糊半径**:DWM BlurBehind 的模糊强度固定(~12-16 px,比 Acrylic 弱)。如未来需要可调模糊半径,可考虑切方案 B(WPF BlurEffect 离屏渲染)+ 拍快照方案,代价大幅上升。
+- **不支持自定义模糊半径**:DWM BlurBehind 的模糊强度固定(~12-16 px,比 Acrylic 弱)。如未来需要可调模糊半径,可考虑切方案 B(WPF BlurEffect 离屏渲染)+ 拍快照方案,代价大幅上升。设置面板已据此把"模糊强度滑块"改为"启用模糊 CheckBox"。
 - **非 Win11 强磨砂感**:用 BlurBehind 而不是 Acrylic 后,视觉风格更接近 Win10 Aero Glass。这是为了保住"用户调色"功能而做的取舍(见 `docs/bug/acrylic_masks_color_opacity.md`)。
-- **私有 API**:`SetWindowCompositionAttribute` 一直未被 Microsoft 正式公开,Win 主版本升级有可能改变行为。`ACCENT_ENABLE_BLURBEHIND` 在 Vista+ 全代际表现一致,稳定性优于 `ACCENT_ENABLE_ACRYLICBLURBEHIND`。
-- **低端机性能**:多个 Fence 同开 BlurBehind 时 GPU 占用升高。`FenceBlurRadius=0` 即可整体关闭,作为 fallback。
+- **私有 API**:`SetWindowCompositionAttribute` 一直未被 Microsoft 正式公开,Win 主版本升级有可能改变行为。`ACCENT_ENABLE_BLURBEHIND` 在 Vista+ 全代际表现一致,稳定性优于 `ACCENT_ENABLE_ACRYLICBLURBEHIND`。`Enable` / `Disable` 现已返回 bool;失败时通过 `Debug.WriteLine` 写诊断日志,`FenceHost` 不裁圆角 region 让 WPF 不透明背景兜底。
+- **低端机性能**:多个 Fence 同开 BlurBehind 时 GPU 占用升高。禁用 `FenceBlurEnabled` 即可整体关闭,作为 fallback。
