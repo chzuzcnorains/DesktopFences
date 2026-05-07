@@ -7,6 +7,46 @@ namespace DesktopFences.UI.ViewModels;
 
 public class FileItemViewModel : ViewModelBase
 {
+    /// <summary>
+    /// System-style badge text (Phase 12). Differs from <see cref="ExtToLabel"/>
+    /// in that img/video/exe/folder return empty (the System DrawingImage already
+    /// contains the visual cue — photo / filmstrip / monitor / folder shape).
+    /// Other kinds carry shorter, system-classic labels (W/X/P/PDF/SQL/MD/...).
+    /// </summary>
+    private static readonly Dictionary<string, string> ExtToSystemBadge =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [".doc"] = "W", [".docx"] = "W", [".rtf"] = "W",
+            [".xls"] = "X", [".xlsx"] = "X", [".csv"] = "X",
+            [".ppt"] = "P", [".pptx"] = "P",
+            [".pdf"] = "PDF",
+            // img — empty (photo glyph in DrawingImage)
+            [".png"] = "", [".jpg"] = "", [".jpeg"] = "",
+            [".gif"] = "", [".bmp"] = "", [".webp"] = "",
+            // video — empty (filmstrip glyph)
+            [".mp4"] = "", [".mov"] = "", [".mkv"] = "", [".avi"] = "", [".webm"] = "",
+            // music — same as App style
+            [".mp3"] = "♪", [".wav"] = "♪", [".flac"] = "♪", [".m4a"] = "♪",
+            [".cs"] = "<>", [".js"] = "<>", [".ts"] = "<>",
+            [".jsx"] = "<>", [".tsx"] = "<>", [".py"] = "<>",
+            [".go"] = "<>", [".rs"] = "<>", [".json"] = "<>",
+            [".xml"] = "<>", [".html"] = "<>", [".css"] = "<>",
+            [".java"] = "<>", [".cpp"] = "<>", [".c"] = "<>",
+            [".h"] = "<>", [".sh"] = "<>",
+            [".sql"] = "SQL",
+            [".ps1"] = ">_",
+            [".zip"] = "ZIP", [".7z"] = "ZIP", [".rar"] = "ZIP",
+            [".tar"] = "ZIP", [".gz"] = "ZIP",
+            // exe — empty (monitor glyph)
+            [".exe"] = "", [".msi"] = "", [".dll"] = "",
+            [".bat"] = "", [".cmd"] = "",
+            [".txt"] = "TXT", [".log"] = "TXT", [".ini"] = "TXT",
+            [".yml"] = "TXT", [".yaml"] = "TXT",
+            [".md"] = "MD",
+            [".lnk"] = "↗", [".url"] = "↗",
+            [".ttf"] = "Aa", [".otf"] = "Aa", [".woff"] = "Aa", [".woff2"] = "Aa",
+        };
+
     private static readonly Dictionary<string, string> ExtToLabel =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -65,6 +105,7 @@ public class FileItemViewModel : ViewModelBase
                 DisplayName = GetDisplayNameWithoutLnkExtension(value);
                 OnPropertyChanged(nameof(Extension));
                 OnPropertyChanged(nameof(KindLabel));
+                OnPropertyChanged(nameof(SystemBadgeText));
                 OnPropertyChanged(nameof(IsDirectory));
             }
         }
@@ -110,6 +151,22 @@ public class FileItemViewModel : ViewModelBase
             var ext = Extension;
             if (string.IsNullOrEmpty(ext)) return string.Empty;
             return ExtToLabel.TryGetValue(ext, out var label) ? label : "TXT";
+        }
+    }
+
+    /// <summary>
+    /// Phase 12: badge label for System-style icons. Empty for folders /
+    /// img / video / exe (those use specialized DrawingImage shapes,
+    /// no overlay text wanted).
+    /// </summary>
+    public string SystemBadgeText
+    {
+        get
+        {
+            if (IsDirectory) return string.Empty;
+            var ext = Extension;
+            if (string.IsNullOrEmpty(ext)) return string.Empty;
+            return ExtToSystemBadge.TryGetValue(ext, out var label) ? label : "TXT";
         }
     }
 }

@@ -760,13 +760,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Push UseCustomFileIcons / IconSize / AccentColor from AppSettings to
+    /// Push IconStyle / UseCustomFileIcons / IconSize / AccentColor from AppSettings to
     /// Application.Resources so DynamicResource consumers (FileIconTemplateSelector,
     /// AccentBrush, tile-size keys) pick them up live. Safe to call multiple times.
     /// </summary>
     private void ApplyIconAppearance(AppSettings settings)
     {
         var clamped = Math.Max(28, Math.Min(64, settings.IconSize));
+        Resources["IconStyle"] = settings.IconStyle.ToString();
         Resources["UseCustomFileIcons"] = settings.UseCustomFileIcons;
         Resources["FileTileIconSize"] = (double)clamped;
         Resources["FileTileWidth"] = (double)(clamped + 44);

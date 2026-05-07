@@ -9,86 +9,8 @@
                        Style="{StaticResource SwPaneDescStyle}" />
         </StackPanel>
 
-        <!-- 外观 -->
-        <TextBlock Text="外观" Style="{StaticResource SwSectionHeaderStyle}" Margin="0,0,0,10" />
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="默认 Fence 颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <TextBox x:Name="TxtFenceColor" Grid.Column="1"
-                     Style="{DynamicResource DarkTextBoxStyle}" />
-        </Grid>
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="标题栏颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <TextBox x:Name="TxtTitleBarColor" Grid.Column="1"
-                     Style="{DynamicResource DarkTextBoxStyle}" />
-        </Grid>
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="文字颜色" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <TextBox x:Name="TxtTextColor" Grid.Column="1"
-                     Style="{DynamicResource DarkTextBoxStyle}" />
-        </Grid>
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="默认透明度" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <Slider x:Name="SliderOpacity" Grid.Column="1"
-                    Style="{DynamicResource DarkSliderStyle}"
-                    Minimum="0.1" Maximum="1.0" TickFrequency="0.1"
-                    IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-        </Grid>
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="标题字号" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <Slider x:Name="SliderFontSize" Grid.Column="1"
-                    Style="{DynamicResource DarkSliderStyle}"
-                    Minimum="10" Maximum="20" TickFrequency="1"
-                    IsSnapToTickEnabled="True" VerticalAlignment="Center" />
-        </Grid>
-
-        <!-- Tab 样式 -->
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="标签页样式" Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center" />
-            <ComboBox x:Name="CboTabStyle" Grid.Column="1"
-                      Style="{DynamicResource DarkComboBoxStyle}">
-                <ComboBox.ItemContainerStyle>
-                    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItemStyle}" />
-                </ComboBox.ItemContainerStyle>
-            </ComboBox>
-        </Grid>
-
         <!-- 行为 -->
-        <TextBlock Text="行为" Style="{StaticResource SwSectionHeaderStyle}" Margin="0,16,0,10" />
+        <TextBlock Text="行为" Style="{StaticResource SwSectionHeaderStyle}" Margin="0,0,0,10" />
 
         <Grid Margin="0,0,0,8">
             <Grid.ColumnDefinitions>

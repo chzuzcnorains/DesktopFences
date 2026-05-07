@@ -127,6 +127,34 @@ public class JsonLayoutStoreTests : IDisposable
         Assert.Equal(@"C:\Users\Test\Documents", loaded[0].PortalPath);
     }
 
+    [Fact]
+    public async Task FenceDefinition_IconStyleOverride_DefaultsToNull()
+    {
+        var fences = new List<FenceDefinition>
+        {
+            new() { Title = "NoOverride" }
+        };
+
+        await _store.SaveFencesAsync(fences);
+        var loaded = await _store.LoadFencesAsync();
+
+        Assert.Null(loaded[0].IconStyleOverride);
+    }
+
+    [Fact]
+    public async Task FenceDefinition_IconStyleOverride_PreservesNonNullValue()
+    {
+        var fences = new List<FenceDefinition>
+        {
+            new() { Title = "WithOverride", IconStyleOverride = FileIconStyle.System }
+        };
+
+        await _store.SaveFencesAsync(fences);
+        var loaded = await _store.LoadFencesAsync();
+
+        Assert.Equal(FileIconStyle.System, loaded[0].IconStyleOverride);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_tempDir, true); }

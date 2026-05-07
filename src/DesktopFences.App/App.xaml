@@ -12,6 +12,7 @@
                 <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/AppLogo.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/Icons.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/FileTypes.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/SystemFileTypes.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/FileTile.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/DesktopFences.UI;component/Themes/Settings.xaml" />
             </ResourceDictionary.MergedDictionaries>

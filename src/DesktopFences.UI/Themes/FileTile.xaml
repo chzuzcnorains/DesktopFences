@@ -23,6 +23,7 @@
 
     <!-- ═════ Converter 实例 ═════ -->
     <conv:FileKindToIconConverter x:Key="KindToIcon"/>
+    <conv:SystemFileKindToIconConverter x:Key="SysKindToIcon"/>
     <conv:LabelLenToFontSizeConverter x:Key="LabelLenToSize"/>
 
 </ResourceDictionary>

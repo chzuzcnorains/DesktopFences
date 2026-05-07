@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -5,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using DesktopFences.Core.Models;
 using DesktopFences.Core.Services;
 using DesktopFences.Shell.Desktop;
 using DesktopFences.Shell.Interop;
@@ -100,6 +102,8 @@ public partial class FencePanel : UserControl
 
     private FencePanelViewModel? ViewModel => DataContext as FencePanelViewModel;
 
+    private FencePanelViewModel? _subscribedVm;
+
     /// <summary>
     /// Returns the current fence body background brush (for tab strip color sync).
     /// </summary>
@@ -109,8 +113,29 @@ public partial class FencePanel : UserControl
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        if (_subscribedVm is not null)
+        {
+            _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
+            _subscribedVm = null;
+        }
+
         if (e.NewValue is FencePanelViewModel vm)
+        {
             ApplyTheme(vm);
+            vm.PropertyChanged += OnViewModelPropertyChanged;
+            _subscribedVm = vm;
+        }
+    }
+
+    /// <summary>
+    /// Phase 13: when EffectiveIconStyle changes (per-fence override toggled,
+    /// or any external code that flips IconStyleOverride), re-run the
+    /// ItemTemplateSelector so each tile picks up the new template.
+    /// </summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FencePanelViewModel.EffectiveIconStyle))
+            RefreshFileTileTemplate();
     }
 
     /// <summary>
@@ -139,12 +164,17 @@ public partial class FencePanel : UserControl
 
     /// <summary>
     /// Force the file ListBox to re-run ItemTemplateSelector. Call after changing
-    /// the global UseCustomFileIcons Application resource so every file item
-    /// switches between custom tiles and Shell icons in place.
+    /// the global IconStyle Application resource so every file item switches
+    /// templates in place. Items.Refresh() alone is insufficient — virtualized
+    /// containers in Recycling mode keep their old ContentTemplate. Detaching
+    /// and re-attaching the selector forces WPF to drop & rebuild item visuals.
     /// </summary>
     public void RefreshFileTileTemplate()
     {
-        FileListBox?.Items.Refresh();
+        if (FileListBox is null) return;
+        var selector = FileListBox.ItemTemplateSelector;
+        FileListBox.ItemTemplateSelector = null;
+        FileListBox.ItemTemplateSelector = selector;
     }
 
     /// <summary>
@@ -253,6 +283,9 @@ public partial class FencePanel : UserControl
         var renameItem = new MenuItem { Header = "重命名" };
         renameItem.Click += (_, _) => BeginRename();
         menu.Items.Add(renameItem);
+
+        // Phase 13: per-fence icon style override
+        menu.Items.Add(BuildIconStyleSubmenu());
 
         menu.Items.Add(new Separator());
 
@@ -564,6 +597,12 @@ public partial class FencePanel : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        if (_subscribedVm is not null)
+        {
+            _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
+            _subscribedVm = null;
+        }
+
         if (_hostWindow is null) return;
         _hostWindow.Activated -= OnHostActivated;
         _hostWindow.Deactivated -= OnHostDeactivated;
@@ -789,6 +828,56 @@ public partial class FencePanel : UserControl
         if (ViewModel is null || !ViewModel.IsRolledUp || !_isHoverExpanded) return;
         _isHoverExpanded = false;
         RollupChanged?.Invoke(true, RolledUpHeight);
+    }
+
+    /// <summary>
+    /// Phase 13: build the "图标风格" submenu (跟随全局 / App 自绘 / System 经典).
+    /// Reads the current per-fence override from <see cref="FencePanelViewModel.IconStyleOverride"/>
+    /// for IsChecked state. Selecting an item updates the ViewModel, refreshes
+    /// the file-tile templates, and fires <see cref="InteractionEnded"/> to
+    /// trigger persistence via the host's RequestAutoSave path.
+    /// Shell style is intentionally not exposed here — it stays a hidden
+    /// fallback configurable only by editing the saved JSON.
+    /// </summary>
+    private MenuItem BuildIconStyleSubmenu()
+    {
+        var root = new MenuItem
+        {
+            Header = "图标风格",
+            Icon = BuildMenuIcon("IconTheme"),
+        };
+
+        var darkItemStyle = Application.Current?.TryFindResource("DarkMenuItemStyle") as Style;
+        var current = ViewModel?.IconStyleOverride;
+
+        AddChoice(root, darkItemStyle, "跟随全局", null,                  current);
+        AddChoice(root, darkItemStyle, "App 自绘", FileIconStyle.App,    current);
+        AddChoice(root, darkItemStyle, "System 经典", FileIconStyle.System, current);
+
+        return root;
+    }
+
+    private void AddChoice(MenuItem parent, Style? itemStyle, string label,
+                           FileIconStyle? value, FileIconStyle? current)
+    {
+        var item = new MenuItem
+        {
+            Header = label,
+            IsCheckable = false,
+            IsChecked = value == current,
+        };
+        if (itemStyle is not null) item.Style = itemStyle;
+        item.Click += (_, _) =>
+        {
+            if (ViewModel is null || ViewModel.IconStyleOverride == value) return;
+            ViewModel.IconStyleOverride = value;
+            // RefreshFileTileTemplate is also invoked by the PropertyChanged
+            // subscription, but call it here too so the update is synchronous
+            // even if the binding hasn't propagated yet.
+            RefreshFileTileTemplate();
+            InteractionEnded?.Invoke();
+        };
+        parent.Items.Add(item);
     }
 
     /// <summary>

@@ -1,6 +1,22 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace DesktopFences.Core.Models;
+
+/// <summary>
+/// File icon rendering style for tiles inside a fence.
+/// Phase 12: dual-card picker exposes App vs System;Shell stays as a hidden
+/// fallback (configurable only by editing settings.json).
+/// </summary>
+public enum FileIconStyle
+{
+    /// <summary>Self-drawn colored tile + letter overlay (default,Phase 10).</summary>
+    App,
+    /// <summary>Windows-classic page-with-fold + colored bottom badge (Phase 12).</summary>
+    System,
+    /// <summary>SHGetFileInfo system icon (legacy fallback).</summary>
+    Shell,
+}
 
 /// <summary>
 /// Global application settings, persisted to settings.json.
@@ -16,11 +32,35 @@ public class AppSettings
     public TabStyle TabStyle { get; set; } = TabStyle.Flat;
 
     /// <summary>
-    /// When true (default), file items use the self-drawn colored file-type
-    /// tiles (FileTypes.xaml + letter overlay). When false, falls back to
-    /// the Shell-extracted Windows icon.
+    /// Legacy boolean retained for backward compatibility. Old settings.json
+    /// files only carried this field;new logic prefers <see cref="IconStyle"/>.
+    /// True = App or System style;false = Shell style.
     /// </summary>
     public bool UseCustomFileIcons { get; set; } = true;
+
+    /// <summary>
+    /// Persisted file icon style. Nullable so we can detect "field missing in
+    /// old JSON" and migrate from <see cref="UseCustomFileIcons"/>.
+    /// External code reads/writes the non-null <see cref="IconStyle"/> facade.
+    /// </summary>
+    [JsonPropertyName("IconStyle")]
+    public FileIconStyle? IconStyleRaw { get; set; }
+
+    /// <summary>
+    /// File icon rendering style. Default <see cref="FileIconStyle.App"/>.
+    /// Setter keeps <see cref="UseCustomFileIcons"/> in sync so any code still
+    /// reading the old flag continues to work.
+    /// </summary>
+    [JsonIgnore]
+    public FileIconStyle IconStyle
+    {
+        get => IconStyleRaw ?? (UseCustomFileIcons ? FileIconStyle.App : FileIconStyle.Shell);
+        set
+        {
+            IconStyleRaw = value;
+            UseCustomFileIcons = value != FileIconStyle.Shell;
+        }
+    }
 
     /// <summary>
     /// Icon body size in pixels for file tiles inside a fence. The surrounding

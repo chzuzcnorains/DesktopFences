@@ -32,6 +32,13 @@ public class FenceDefinition
 
     /// <summary>Display order within the tab group (0 = leftmost tab).</summary>
     public int TabOrder { get; set; }
+
+    /// <summary>
+    /// Phase 13: per-fence file icon style override. <c>null</c> means inherit
+    /// the global <see cref="AppSettings.IconStyle"/>; non-null forces this
+    /// fence to render with the chosen style regardless of the global setting.
+    /// </summary>
+    public FileIconStyle? IconStyleOverride { get; set; }
 }
 
 public class FenceRect

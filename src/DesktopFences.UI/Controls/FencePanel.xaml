@@ -71,6 +71,64 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- ═════ System file tile: Windows 经典 page-with-fold + colored badge + 字母 ═════ -->
+        <DataTemplate x:Key="SystemFileTile">
+            <Border x:Name="ItemBorder"
+                    Width="{DynamicResource FileTileWidth}"
+                    Height="{DynamicResource FileTileHeight}"
+                    Margin="2"
+                    CornerRadius="4"
+                    Background="Transparent"
+                    MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
+                    MouseRightButtonUp="FileItem_MouseRightButtonUp"
+                    MouseMove="FileItem_MouseMove"
+                    ToolTip="{Binding FilePath}">
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0"
+                          Width="{DynamicResource FileTileIconSize}"
+                          Height="{DynamicResource FileTileIconSize}"
+                          HorizontalAlignment="Center">
+                        <Image Source="{Binding Extension, Converter={StaticResource SysKindToIcon}}"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock Text="{Binding SystemBadgeText}"
+                                   Foreground="White"
+                                   FontWeight="Bold"
+                                   FontFamily="Segoe UI"
+                                   FontSize="{Binding SystemBadgeText, Converter={StaticResource LabelLenToSize}}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Bottom"
+                                   Margin="0,0,0,5"
+                                   IsHitTestVisible="False">
+                            <TextBlock.Effect>
+                                <DropShadowEffect BlurRadius="2" ShadowDepth="0.6" Opacity="0.4" Color="Black"/>
+                            </TextBlock.Effect>
+                        </TextBlock>
+                    </Grid>
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding DisplayName}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               FontSize="11"
+                               TextAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               MaxHeight="32"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,0"/>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="ItemBorder" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource HoverBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- ═════ Shell file tile: 走 ShellIconExtractor 的系统图标 ═════ -->
         <DataTemplate x:Key="ShellFileTile">
             <Border x:Name="ItemBorder"
@@ -115,9 +173,10 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Picks Custom vs Shell based on global UseCustomFileIcons resource. -->
+        <!-- Picks App / System / Shell based on global IconStyle resource. -->
         <ctrl:FileIconTemplateSelector x:Key="FileIconSelector"
                                        CustomTemplate="{StaticResource CustomFileTile}"
+                                       SystemTemplate="{StaticResource SystemFileTile}"
                                        ShellTemplate="{StaticResource ShellFileTile}"/>
         <Style x:Key="TitleBarVisibilityStyle" TargetType="{x:Type Border}">
             <Setter Property="Visibility" Value="Visible"/>

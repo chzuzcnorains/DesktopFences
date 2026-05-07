@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using DesktopFences.Core.Models;
 
 namespace DesktopFences.UI.ViewModels;
@@ -28,6 +29,7 @@ public class FencePanelViewModel : ViewModelBase
     private bool _isFocused;
     private bool _isDropHover;
     private bool _isMergeTarget;
+    private FileIconStyle? _iconStyleOverride;
 
     public ObservableCollection<FileItemViewModel> Files { get; } = [];
 
@@ -53,6 +55,7 @@ public class FencePanelViewModel : ViewModelBase
         _viewMode = model.ViewMode;
         _sortBy = model.SortBy;
         _sortDirection = model.SortDirection;
+        _iconStyleOverride = model.IconStyleOverride;
 
         // Load existing file paths from model
         foreach (var path in model.FilePaths)
@@ -309,6 +312,44 @@ public class FencePanelViewModel : ViewModelBase
     {
         get => _isMergeTarget;
         set => SetProperty(ref _isMergeTarget, value);
+    }
+
+    /// <summary>
+    /// Phase 13: per-fence file icon style override. <c>null</c> = inherit
+    /// the global <see cref="AppSettings.IconStyle"/>; non-null = force this
+    /// fence to use the chosen style. Setter also raises a change notification
+    /// for <see cref="EffectiveIconStyle"/> so subscribers can refresh tiles.
+    /// </summary>
+    public FileIconStyle? IconStyleOverride
+    {
+        get => _iconStyleOverride;
+        set
+        {
+            if (SetProperty(ref _iconStyleOverride, value))
+            {
+                _model.IconStyleOverride = value;
+                OnPropertyChanged(nameof(EffectiveIconStyle));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phase 13: the icon style that should actually drive this fence's tiles.
+    /// Resolves to <see cref="IconStyleOverride"/> when set, otherwise reads the
+    /// global <c>Application.Resources["IconStyle"]</c> string published by
+    /// <c>App.xaml.cs::ApplyIconAppearance</c>. Falls back to
+    /// <see cref="FileIconStyle.App"/> if neither is available.
+    /// </summary>
+    public FileIconStyle EffectiveIconStyle
+    {
+        get
+        {
+            if (_iconStyleOverride is { } o) return o;
+            if (Application.Current?.TryFindResource("IconStyle") is string s
+                && Enum.TryParse<FileIconStyle>(s, out var parsed))
+                return parsed;
+            return FileIconStyle.App;
+        }
     }
 
     public const double MinWidth = 120;
