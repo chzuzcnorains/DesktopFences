@@ -46,6 +46,25 @@ public partial class DesktopIconOverlay : Window
     private const double GridMarginLeft = 10;
     private const double GridMarginTop = 10;
 
+    // Cell 内部布局：icon 区固定 54 高、文字区固定 36 高，总和 = CellHeight
+    // 让 icon / 文字各自占据固定槽位，保证不同 cell 的 icon、文字水平/垂直中心一致
+    private const double CellWidth = 86;
+    private const double CellHeight = 90;
+    private const double IconRowHeight = 54;
+    private const double TextRowHeight = 36;
+
+    // AllowsTransparency=True 的层叠窗口下，Windows OS 用每像素 alpha 决定 click 走向：
+    // alpha=0 的像素直接被判为 click-through，根本不会送到 WPF 的命中测试。
+    // Brushes.Transparent 的 alpha 就是 0，所以"透明背景但可点"的 WPF 经典写法
+    // 在 AllowsTransparency 窗口里失效。用 alpha=1 的画刷（视觉不可感知）做兜底。
+    private static readonly SolidColorBrush ClickableTransparentBrush =
+        new(Color.FromArgb(1, 0, 0, 0));
+
+    static DesktopIconOverlay()
+    {
+        ClickableTransparentBrush.Freeze();
+    }
+
     /// <summary>Fired when a file is dragged off the overlay into a fence.</summary>
     public event Action<string>? FileDraggedToFence;
 
@@ -172,24 +191,22 @@ public partial class DesktopIconOverlay : Window
             displayName = displayName.Substring(0, displayName.Length - 4);
         }
 
+        // 把 cell 拆成 icon 区（IconRowHeight）+ 文字区（TextRowHeight）两个固定槽位，
+        // 让 icon 与文字的位置完全不受彼此尺寸影响，保证同行/同列水平/垂直中心一致。
         var image = new Image
         {
             Source = icon,
+            Width = 48,
+            Height = 48,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Stretch = Stretch.Uniform, // 均匀缩放以填充
+            Stretch = Stretch.Uniform,
             SnapsToDevicePixels = true,
             UseLayoutRounding = true
         };
-
-        // 使用高质量渲染模式
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
         RenderOptions.SetClearTypeHint(image, ClearTypeHint.Enabled);
-
-        // 直接设置为你测量的 Windows 原生尺寸！
-        // 在 150% DPI 下，72 物理像素 = 72 / 1.5 ≈ 48 DIP
-        image.Width = 48;
-        image.Height = 48;
+        Grid.SetRow(image, 0);
 
         var text = new TextBlock
         {
@@ -198,10 +215,12 @@ public partial class DesktopIconOverlay : Window
             Foreground = Brushes.White,
             TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxHeight = 36,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(2, 2, 2, 0),
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true,
             Effect = new DropShadowEffect
             {
                 BlurRadius = 3,
@@ -210,25 +229,31 @@ public partial class DesktopIconOverlay : Window
                 Color = Colors.Black
             }
         };
+        Grid.SetRow(text, 1);
 
-        var stack = new StackPanel
+        var grid = new Grid
         {
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(4)
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
-        stack.Children.Add(image);
-        stack.Children.Add(text);
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(IconRowHeight) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(TextRowHeight) });
+        grid.Children.Add(image);
+        grid.Children.Add(text);
 
         var border = new Border
         {
-            Width = 86,
-            Height = 90,
+            Width = CellWidth,
+            Height = CellHeight,
             CornerRadius = new CornerRadius(4),
-            Background = Brushes.Transparent,
-            Child = stack,
+            // 关键：必须用 alpha>=1 的画刷，Brushes.Transparent (alpha=0) 在 AllowsTransparency
+            // 窗口里会被 OS 判为 click-through —— click 不会进入 WPF，整个 cell 的空白区域选不中
+            Background = ClickableTransparentBrush,
+            Child = grid,
             Tag = filePath, // store file path for event handlers
-            ToolTip = filePath
+            ToolTip = filePath,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
         };
 
         border.MouseLeftButtonDown += OnIconMouseDown;
@@ -416,7 +441,9 @@ public partial class DesktopIconOverlay : Window
     {
         foreach (var element in _iconElements.Values)
         {
-            element.Background = Brushes.Transparent;
+            // 必须用 ClickableTransparentBrush (alpha=1) 而不是 Brushes.Transparent (alpha=0)，
+            // 否则取消选中后 cell 又变回 OS 层 click-through，blank 区域无法再被选中
+            element.Background = ClickableTransparentBrush;
         }
     }
 

@@ -176,6 +176,7 @@ src/
 - 原子写入（写临时文件 → rename）防止数据损坏
 - 图标缓存按文件扩展名（非路径）缓存，LRU 上限 500
 - FileSystemWatcher + 定时全量扫描（30 秒）保证可靠性
+- 使用 `DarkComboBoxStyle` 且数据项是非字符串对象时，必须用显式 `ItemTemplate` 而非 `DisplayMemberPath`：自定义 ControlTemplate 下 `SelectionBoxItemTemplate` 不会从 `DisplayMemberPath` 自动派生，闭合态会回退到对象的 `ToString()`（详见 [bug #17](../bug/rules_combobox_selectionbox_tostring.md)）
 
 ---
 

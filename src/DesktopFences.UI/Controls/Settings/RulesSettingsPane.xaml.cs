@@ -27,7 +27,6 @@ public partial class RulesSettingsPane : UserControl
 
         foreach (var opt in MatchTypeOptions)
             CboMatchType.Items.Add(opt);
-        CboMatchType.DisplayMemberPath = "Display";
     }
 
     /// <summary>
@@ -42,7 +41,6 @@ public partial class RulesSettingsPane : UserControl
         CboTargetFence.Items.Clear();
         foreach (var fence in _fences)
             CboTargetFence.Items.Add(fence);
-        CboTargetFence.DisplayMemberPath = "Title";
 
         RefreshRuleList();
         EditPanel.Opacity = 0.4;

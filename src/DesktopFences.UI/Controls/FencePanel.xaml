@@ -21,11 +21,15 @@
                     Margin="2"
                     CornerRadius="4"
                     Background="Transparent"
+                    SnapsToDevicePixels="True"
+                    UseLayoutRounding="True"
                     MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
                     MouseRightButtonUp="FileItem_MouseRightButtonUp"
                     MouseMove="FileItem_MouseMove"
                     ToolTip="{Binding FilePath}">
-                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4">
+                <!-- 外 Grid 撑满 Border（默认 Stretch），把 cell 拆成 icon 行 + 文字行两个固定槽位，
+                     避免 StackPanel/Center 模式下尺寸由内容反推导致 icon 中心随文字长短/wrap 行数漂移 -->
+                <Grid Margin="4" SnapsToDevicePixels="True" UseLayoutRounding="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -33,7 +37,8 @@
                     <Grid Grid.Row="0"
                           Width="{DynamicResource FileTileIconSize}"
                           Height="{DynamicResource FileTileIconSize}"
-                          HorizontalAlignment="Center">
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
                         <Image Source="{Binding Extension, Converter={StaticResource KindToIcon}}"
                                RenderOptions.BitmapScalingMode="HighQuality"/>
                         <TextBlock Text="{Binding KindLabel}"
@@ -58,6 +63,10 @@
                                TextTrimming="CharacterEllipsis"
                                MaxHeight="32"
                                TextWrapping="Wrap"
+                               HorizontalAlignment="Stretch"
+                               VerticalAlignment="Top"
+                               SnapsToDevicePixels="True"
+                               UseLayoutRounding="True"
                                Margin="0,4,0,0"/>
                 </Grid>
             </Border>
@@ -79,11 +88,13 @@
                     Margin="2"
                     CornerRadius="4"
                     Background="Transparent"
+                    SnapsToDevicePixels="True"
+                    UseLayoutRounding="True"
                     MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
                     MouseRightButtonUp="FileItem_MouseRightButtonUp"
                     MouseMove="FileItem_MouseMove"
                     ToolTip="{Binding FilePath}">
-                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4">
+                <Grid Margin="4" SnapsToDevicePixels="True" UseLayoutRounding="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -91,7 +102,8 @@
                     <Grid Grid.Row="0"
                           Width="{DynamicResource FileTileIconSize}"
                           Height="{DynamicResource FileTileIconSize}"
-                          HorizontalAlignment="Center">
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
                         <Image Source="{Binding Extension, Converter={StaticResource SysKindToIcon}}"
                                RenderOptions.BitmapScalingMode="HighQuality"/>
                         <TextBlock Text="{Binding SystemBadgeText}"
@@ -116,6 +128,10 @@
                                TextTrimming="CharacterEllipsis"
                                MaxHeight="32"
                                TextWrapping="Wrap"
+                               HorizontalAlignment="Stretch"
+                               VerticalAlignment="Top"
+                               SnapsToDevicePixels="True"
+                               UseLayoutRounding="True"
                                Margin="0,4,0,0"/>
                 </Grid>
             </Border>
@@ -137,11 +153,13 @@
                     Margin="2"
                     CornerRadius="4"
                     Background="Transparent"
+                    SnapsToDevicePixels="True"
+                    UseLayoutRounding="True"
                     MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
                     MouseRightButtonUp="FileItem_MouseRightButtonUp"
                     MouseMove="FileItem_MouseMove"
                     ToolTip="{Binding FilePath}">
-                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4">
+                <Grid Margin="4" SnapsToDevicePixels="True" UseLayoutRounding="True">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -151,6 +169,9 @@
                            Width="{DynamicResource FileTileIconSize}"
                            Height="{DynamicResource FileTileIconSize}"
                            HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           SnapsToDevicePixels="True"
+                           UseLayoutRounding="True"
                            RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Grid.Row="1"
                                Text="{Binding DisplayName}"
@@ -160,6 +181,10 @@
                                TextTrimming="CharacterEllipsis"
                                MaxHeight="32"
                                TextWrapping="Wrap"
+                               HorizontalAlignment="Stretch"
+                               VerticalAlignment="Top"
+                               SnapsToDevicePixels="True"
+                               UseLayoutRounding="True"
                                Margin="0,4,0,0"/>
                 </Grid>
             </Border>

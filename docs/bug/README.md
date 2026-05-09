@@ -22,6 +22,9 @@
 | 14 | [右键托盘小图标导致 fence 浮到最大化窗口之上](tray_right_click_fences_pop_to_front.md) | 其他程序最大化时右键系统托盘小图标，所有 fence/overlay 被强行拉到 HWND_TOPMOST。原因：非 topmost 分支 hoist 触发条件包含了 Shell_TrayWnd；点托盘前 foreground 会短暂切到任务栏 | 已修复 | 2026-05-09 |
 | 15 | [文件图标显示与系统关联不一致](icon_wrong_app_association.md) | `.docx` 显示红色 MS Word 图标而非已设默认的 WPS 蓝图标。两段式：①ShellIconExtractor 改用 IShellItemImageFactory 解决抽图模糊；② 把 Shell 风格暴露到外观设置 picker 与 fence 菜单 | 已修复 | 2026-05-09 |
 | 16 | [保存设置后 Portal Fence 内容被清空](portal_files_wiped_after_save_settings.md) | Portal fence 在保存任意设置（IconStyle、Hue 等）后立刻变空。SettingsWindow 保存按钮无条件 fire RulesSaved → ReEvaluateClassifiedFiles 把"不被任何规则匹配"的文件全部 RemoveFile，portal 的外部文件夹文件首当其冲 | 已修复 | 2026-05-09 |
+| 17 | [设置-分类规则下拉框选中后展示与下拉项不一致](rules_combobox_selectionbox_tostring.md) | 「匹配方式」「目标 Fence」下拉项正常显示中文，闭合后却显示对象 ToString（如 `MatchTypeOption { Display = ... }`）。自定义 ComboBox ControlTemplate 下 `DisplayMemberPath` 不会填充 `SelectionBoxItemTemplate`，需用显式 `ItemTemplate` | 已修复 | 2026-05-09 |
+| 18 | [Cell 内 icon/文字水平垂直中心不一致（Overlay + FencePanel）](overlay_icon_text_misalignment.md) | DesktopIconOverlay 用 StackPanel、FencePanel 三个 file tile DataTemplate 用「外 Grid HorizontalAlignment=Center+VerticalAlignment=Center」包 icon+文字，中间容器尺寸都被内容反推，导致同行/同列 icon 中心错位、文字 wrap 行数变化时 icon 上下挪位。两处统一改为外容器撑满 Border + 两行固定槽位 + SnapsToDevicePixels/UseLayoutRounding | 已修复 | 2026-05-09 |
+| 19 | [未归档 cell 空白区域单击无法选中](overlay_cell_blank_area_not_selectable.md) | 单击 cell 内 icon/文字之外的空白区域 cell 不被选中。**真因**：`AllowsTransparency=True` 是 layered window，OS 按每像素 alpha 决定 click 走向，alpha=0 直接 click-through，**不会进 WPF**。`Brushes.Transparent` (alpha=0) 把 cell 整片做成 OS 透传。修复：cell Border 改用 alpha=1 的 `ClickableTransparentBrush` (`Color.FromArgb(1,0,0,0)`)，视觉无差但 OS 视为可命中；`ClearSelection` 同步用同一画刷 | 已修复 | 2026-05-09 |
 
 ## 常见问题说明
 
