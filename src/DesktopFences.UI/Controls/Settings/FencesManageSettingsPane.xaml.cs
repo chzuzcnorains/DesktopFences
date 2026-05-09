@@ -300,7 +300,8 @@ public partial class FencesManageSettingsPane : UserControl
         var deleteBtn = new Button
         {
             Content = "删除",
-            Padding = new Thickness(10, 6, 10, 6),
+            Style = (Style)FindResource("DangerButtonStyle"),
+            Padding = new Thickness(12, 6, 12, 6),
             Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             ToolTip = "从最近关闭列表中永久移除",

@@ -32,3 +32,14 @@
 - 左键单击：显示/隐藏所有 Fence
 - 右键单击：显示托盘菜单
 - 双击：显示/隐藏所有 Fence（与 Quick Hide 独立）
+
+## 4. 视觉风格
+
+- 托盘菜单基于 WinForms `NotifyIcon.ContextMenuStrip`（Win32 Shell 通知区限制，无法直接换成 WPF `ContextMenu`）。
+- 通过 `DarkTrayMenuRenderer`（位于 [`src/DesktopFences.App/DarkTrayMenuRenderer.cs`](../../src/DesktopFences.App/DarkTrayMenuRenderer.cs)）让 WinForms 菜单与 [`DarkTheme.xaml`](../../src/DesktopFences.UI/Themes/DarkTheme.xaml) 的 `DarkContextMenuStyle` 视觉一致：
+  - 自定义 `ProfessionalColorTable` + `ToolStripProfessionalRenderer`，色板源自 DarkTheme（`FenceBaseColor #1A2036`、`AccentStrong`、`TextPrimaryBrush`）。
+  - WinForms GDI+ 不支持 alpha，所有 WPF 半透明色必须先叠到底色折算为不透明等价值。
+  - `ShowImageMargin = false` 关掉左侧 image gutter。
+  - **8px 圆角**：与 `DarkContextMenuStyle CornerRadius="8"` 对齐。沿用 fence panel `AcrylicCompositor` 同方案 — `Opened` 事件里给 popup HWND 调 `SetWindowRgn(CreateRoundRectRgn(...))`（不能用 `HandleCreated`：handle 早于 layout，此时 `Width`/`Height` 仍为 0）。重写 `OnRenderToolStripBorder` 为空避免方边框跑出 region。
+  - **字号 10.5pt（MS YaHei UI）**：放大原 9pt 默认字，向 WPF 菜单 `FontSize=12.5` 靠拢。子菜单 `Font` 不继承，需要单独设。
+- 动态填充的子菜单（最近关闭、布局快照）在 `DropDownOpening` 重建后必须递归调用 `DarkTrayMenuRenderer.ApplyToItems`：新 `ToolStripMenuItem` 默认 `ForeColor = SystemColors.ControlText`（黑），不会从父菜单继承前景色。

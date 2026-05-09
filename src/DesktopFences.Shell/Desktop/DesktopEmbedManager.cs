@@ -26,7 +26,6 @@ public sealed class DesktopEmbedManager : IDisposable
     private bool _isTopmost;
     private bool _isPeekActive;
     private bool _pendingTopmost;   // true while 300ms timer is in-flight
-    private bool _winKeyDown;
     private bool _isDragging;       // true during drag — suppress foreground z-order recovery
     private System.Timers.Timer? _showDesktopTimer;
     private System.Timers.Timer? _zOrderRecoveryTimer;
@@ -167,23 +166,25 @@ public sealed class DesktopEmbedManager : IDisposable
 
             if (msg == NativeMethods.WM_KEYDOWN || msg == NativeMethods.WM_SYSKEYDOWN)
             {
-                if (kb.vkCode == NativeMethods.VK_LWIN || kb.vkCode == NativeMethods.VK_RWIN)
-                    _winKeyDown = true;
-
-                if (kb.vkCode == NativeMethods.VK_D && _winKeyDown)
+                // Win 键状态用 GetAsyncKeyState 实时查询，不维护累积标志：
+                // 系统组合键 (Win+L/Win+E/Win+R/Win+Tab 等) 的 Win KEYUP 经常不会
+                // 传到低级钩子，累积标志会残留 true，导致用户在其他程序里打字按到
+                // 'D' 时被误判为 Win+D，触发 fence 一闪而过。
+                if (kb.vkCode == NativeMethods.VK_D && IsWinKeyPhysicallyDown())
                     OnShowDesktopDetected();
 
                 if (kb.vkCode == NativeMethods.VK_ESCAPE)
                     EscapePressed?.Invoke();
             }
-            else
-            {
-                if (kb.vkCode == NativeMethods.VK_LWIN || kb.vkCode == NativeMethods.VK_RWIN)
-                    _winKeyDown = false;
-            }
         }
 
         return _keyboardHook.CallNext(nCode, wParam, lParam);
+    }
+
+    private static bool IsWinKeyPhysicallyDown()
+    {
+        return (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LWIN) & 0x8000) != 0
+            || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RWIN) & 0x8000) != 0;
     }
 
     private void OnShowDesktopDetected()

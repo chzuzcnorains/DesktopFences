@@ -41,6 +41,7 @@ public partial class App : Application
     private UI.Controls.SnapGuideOverlay? _snapGuideOverlay;
     private DesktopIconManager? _desktopIconManager;
     private DesktopIconOverlay? _desktopOverlay;
+    private SettingsWindow? _settingsWindow;
     private readonly string _desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
     private readonly string _publicDesktopPath = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
 
@@ -296,6 +297,9 @@ public partial class App : Application
             _ = SaveFencesAsync();
             Shutdown();
         }));
+
+        // 与 WPF DarkTheme 视觉一致：应用暗色 Renderer / 配色 / 字体。
+        DarkTrayMenuRenderer.Apply(menu);
         return menu;
     }
 
@@ -325,6 +329,9 @@ public partial class App : Application
             menu.DropDownItems.Add(new ToolStripSeparator());
             menu.DropDownItems.Add("清空列表", null, (_, _) => Dispatcher.Invoke(ClearRecentClosedFences));
         }
+
+        // DropDownOpening 时新加的项不会自动继承父菜单 ForeColor，需要重新刷一次。
+        DarkTrayMenuRenderer.ApplyToItems(menu.DropDownItems);
     }
 
     /// <summary>
@@ -403,6 +410,9 @@ public partial class App : Application
             var empty = new ToolStripMenuItem("（无快照）") { Enabled = false };
             menu.DropDownItems.Add(empty);
         }
+
+        // 动态新增的快照项及其二级子菜单（恢复/删除）需要重新应用暗色样式。
+        DarkTrayMenuRenderer.ApplyToItems(menu.DropDownItems);
     }
 
     // Page menu removed — Windows virtual desktops handle page/desktop management.
@@ -411,6 +421,19 @@ public partial class App : Application
 
     private void ShowSettings(int tabIndex = 0)
     {
+        // 已有窗口则复用：切到目标 tab、激活并置前。
+        // 关键：用 Show() 而非 ShowDialog()，避免 WPF 模态对话框对同线程其他顶层窗口
+        // 调用 EnableWindow(FALSE)，导致 FenceHost / DesktopIconOverlay 全部无法接收
+        // 鼠标点击（参见 docs/bug/settings_modal_disables_fences.md）。
+        if (_settingsWindow is not null)
+        {
+            _settingsWindow.SelectTab(tabIndex);
+            if (_settingsWindow.WindowState == WindowState.Minimized)
+                _settingsWindow.WindowState = WindowState.Normal;
+            _settingsWindow.Activate();
+            return;
+        }
+
         var fences = _fenceWindows.AllDefinitions();
         var managedFiles = fences.Sum(f => f.FilePaths.Count);
         var closedFences = ParseRecentClosedFences(_appSettings.RecentClosedFences);
@@ -461,7 +484,10 @@ public partial class App : Application
         settingsWindow.ClearRulesRequested         += () => { ClearAllRules(); settingsWindow.Close(); };
         settingsWindow.RestoreDefaultsRequested    += () => { RestoreDefaultSettings(); settingsWindow.Close(); };
 
-        settingsWindow.ShowDialog();
+        settingsWindow.Closed += (_, _) => _settingsWindow = null;
+
+        _settingsWindow = settingsWindow;
+        settingsWindow.Show();
     }
 
     /// <summary>
