@@ -177,10 +177,11 @@
                     <StackPanel>
                         <TextBlock Text="图标风格 · Icon style"
                                    Style="{StaticResource SwSectionHeaderStyle}" />
-                        <TextBlock Text="App 为自绘彩色 tile + 字母叠加；System 为 Windows 经典 page-with-fold + 角标。"
-                                   Style="{StaticResource CardSubtitleStyle}" />
+                        <TextBlock Text="App 为自绘彩色 tile + 字母；System 为经典 page-with-fold + 角标；Shell 为 Windows 资源管理器的真实系统图标。"
+                                   Style="{StaticResource CardSubtitleStyle}"
+                                   TextWrapping="Wrap" />
                         <UniformGrid x:Name="IconStyleGrid"
-                                     Columns="2" Rows="1" />
+                                     Columns="3" Rows="1" />
                     </StackPanel>
                 </Border>
 

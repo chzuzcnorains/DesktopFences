@@ -33,6 +33,16 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
+                <!-- Drop indicator for tab drag-reorder. X position is set in code-behind via Margin.Left;
+                     accent color comes from the global AccentBrush so it matches the active tab style. -->
+                <Rectangle x:Name="TabDropIndicator"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"
+                           Width="2" Height="22"
+                           Fill="{DynamicResource AccentBrush}"
+                           Visibility="Collapsed"
+                           IsHitTestVisible="False"
+                           SnapsToDevicePixels="True" />
                 <Button x:Name="TabRollupToggleButton"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"

@@ -27,6 +27,14 @@ public partial class FenceHost : Window
     private bool _acrylicBlurEnabled;
     private bool _acrylicBlurApplied;
 
+    // Tab drag-reorder state. _tabDragArmed: a tab button has been pressed and we're
+    // waiting to see if the gesture exceeds the system drag threshold. _tabDragActive:
+    // the threshold is exceeded, mouse is captured by TabStrip, indicator is showing.
+    private Point _tabDragStart;
+    private int _tabDragFromIndex = -1;
+    private bool _tabDragArmed;
+    private bool _tabDragActive;
+
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
     /// so the Closed handler skips page/portal cleanup for tabs that moved elsewhere.
@@ -91,6 +99,12 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         FenceContent.CloseRequested += AnimateClose;
         FenceContent.TabMenuSwitchRequested += OnTabMenuSwitch;
         TabStripBorder.MouseLeftButtonDown += TabStripBorder_MouseLeftButtonDown;
+        // Tab drag-reorder: PreviewMouseDown sits on each button (assigned in RefreshTabStrip).
+        // Move/Up are attached at the Window level so they fire even if Button's internal
+        // mouse-capture or other route interception pulls events away from TabStrip.
+        // Capture is also set on the Window itself for the same reason.
+        AddHandler(PreviewMouseMoveEvent, new MouseEventHandler(OnTabStripPreviewMouseMove), handledEventsToo: true);
+        AddHandler(PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnTabStripPreviewMouseLeftButtonUp), handledEventsToo: true);
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
         Loaded += OnLoaded;
@@ -292,8 +306,25 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             if (_tabStyle == TabStyle.Segmented && isLast)
                 btn.BorderThickness = new Thickness(0);
 
-            btn.Click += (_, _) =>
+            btn.PreviewMouseLeftButtonDown += (_, e) =>
             {
+                _tabDragArmed = true;
+                _tabDragActive = false;
+                _tabDragFromIndex = idx;
+                _tabDragStart = e.GetPosition(TabStrip);
+            };
+
+            btn.Click += (_, e) =>
+            {
+                // If we just finished a drag-reorder, RefreshTabStrip already rebuilt the strip
+                // and _tabDragActive is reset — but Click can still fire on the original button
+                // if mouse capture didn't intercept. Suppress in that case.
+                if (_tabDragActive)
+                {
+                    _tabDragActive = false;
+                    e.Handled = true;
+                    return;
+                }
                 _activeTabIndex = idx;
                 ActivatePanelForTab(idx);
                 RefreshTabStrip();
@@ -394,6 +425,162 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             ActivatePanelForTab(tabIndex);
             RefreshTabStrip();
         }
+    }
+
+    // ── Tab drag-reorder ───────────────────────────────────
+
+    private void OnTabStripPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_tabDragArmed) return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            ResetTabDragState();
+            return;
+        }
+
+        var pos = e.GetPosition(TabStrip);
+        if (!_tabDragActive)
+        {
+            if (Math.Abs(pos.X - _tabDragStart.X) < SystemParameters.MinimumHorizontalDragDistance)
+                return;
+            _tabDragActive = true;
+            // Capture on the Window — subsequent mouse events tunnel to the Window-level
+            // handlers above, regardless of whether the cursor moves over a Button or
+            // outside the strip. CaptureMode.SubTree keeps existing event delivery to
+            // child controls intact, so the indicator-position calc still works.
+            Mouse.Capture(this, CaptureMode.SubTree);
+            TabDropIndicator.Visibility = Visibility.Visible;
+        }
+
+        int dropIndex = ComputeTabDropIndex(pos.X);
+        PositionTabDropIndicator(dropIndex);
+    }
+
+    private void OnTabStripPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_tabDragActive)
+        {
+            // Plain click — armed but no drag. Let the button's Click fire normally.
+            ResetTabDragState();
+            return;
+        }
+
+        var pos = e.GetPosition(TabStrip);
+        int dropIndex = ComputeTabDropIndex(pos.X);
+        int from = _tabDragFromIndex;
+
+        // dropIndex is computed against the virtual sequence (with `from` removed),
+        // so dropIndex == from means "put it back exactly where it was" = noop.
+        bool noop = from < 0 || from >= _tabs.Count || dropIndex == from;
+
+        // Release capture & hide indicator first; we rebuild the strip below
+        // and don't want stale capture interfering with the new buttons.
+        if (Mouse.Captured == this)
+            Mouse.Capture(null);
+        TabDropIndicator.Visibility = Visibility.Collapsed;
+        _tabDragArmed = false;
+        _tabDragFromIndex = -1;
+        e.Handled = true;
+
+        if (noop)
+        {
+            _tabDragActive = false;
+            return;
+        }
+
+        var vm = _tabs[from];
+        _tabs.RemoveAt(from);
+        _tabs.Insert(dropIndex, vm);
+        _activeTabIndex = _tabs.IndexOf(vm);
+
+        for (int i = 0; i < _tabs.Count; i++)
+            _tabs[i].Model.TabOrder = i;
+
+        // Keep _tabDragActive=true through RefreshTabStrip so any stale Click on the
+        // old button instance gets suppressed; the new buttons reset it themselves.
+        RefreshTabStrip();
+        _tabDragActive = false;
+        FenceContent.RaiseInteractionEnded();
+    }
+
+    private void ResetTabDragState()
+    {
+        if (Mouse.Captured == this)
+            Mouse.Capture(null);
+        _tabDragArmed = false;
+        _tabDragActive = false;
+        _tabDragFromIndex = -1;
+        if (TabDropIndicator is not null)
+            TabDropIndicator.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Given a mouse X coordinate (relative to TabStrip), return the slot index in the
+    /// VIRTUAL sequence (i.e. the tab list with the currently-dragged tab removed) where
+    /// the dragged tab should land — 0 means "before first remaining tab", N-1 means
+    /// "after last". Working in the virtual sequence makes "drop next to my own tab" map
+    /// cleanly to "back where I was" instead of being ambiguous between two adjacent slots.
+    /// </summary>
+    private int ComputeTabDropIndex(double mouseX)
+    {
+        int count = TabStrip.Items.Count;
+        int virt = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (i == _tabDragFromIndex) continue;
+            if (GetTabContainer(i) is not FrameworkElement el) continue;
+            var topLeft = el.TranslatePoint(new Point(0, 0), TabStrip);
+            double mid = topLeft.X + el.ActualWidth / 2;
+            if (mouseX < mid) return virt;
+            virt++;
+        }
+        return virt;
+    }
+
+    private void PositionTabDropIndicator(int virtualIndex)
+    {
+        int count = TabStrip.Items.Count;
+        if (count == 0)
+        {
+            TabDropIndicator.Margin = new Thickness(0, 0, 0, 0);
+            return;
+        }
+
+        // Walk the same virtual sequence: skip from-tab; when virt == virtualIndex we
+        // anchor on the LEFT edge of that tab; if virtualIndex sits past the last
+        // non-from tab we anchor on the RIGHT edge of the last non-from tab.
+        int virt = 0;
+        FrameworkElement? lastNonFrom = null;
+        for (int i = 0; i < count; i++)
+        {
+            if (i == _tabDragFromIndex) continue;
+            if (GetTabContainer(i) is not FrameworkElement el) continue;
+            lastNonFrom = el;
+            if (virt == virtualIndex)
+            {
+                var anchor = el.TranslatePoint(new Point(0, 0), TabStripBorder);
+                TabDropIndicator.Margin = new Thickness(anchor.X - 1, 0, 0, 0);
+                return;
+            }
+            virt++;
+        }
+        if (lastNonFrom is not null)
+        {
+            var anchor = lastNonFrom.TranslatePoint(new Point(lastNonFrom.ActualWidth, 0), TabStripBorder);
+            TabDropIndicator.Margin = new Thickness(anchor.X - 1, 0, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// Resolve the visual container for the tab at <paramref name="index"/>.
+    /// ItemsControl wraps non-UIElement items in ContentPresenter, but Buttons
+    /// (which are themselves UIElements) usually go straight in — fall back through
+    /// both paths so layout-position queries are robust.
+    /// </summary>
+    private FrameworkElement? GetTabContainer(int index)
+    {
+        var container = TabStrip.ItemContainerGenerator.ContainerFromIndex(index) as FrameworkElement;
+        return container ?? TabStrip.Items[index] as FrameworkElement;
     }
 
     // ── Tab strip drag to move window ──────────────────────

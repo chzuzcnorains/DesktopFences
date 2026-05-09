@@ -195,6 +195,10 @@ public partial class App : Application
         bool changed = false;
         foreach (var tab in _fenceWindows.AllTabs())
         {
+            // Portal fence 内容来自被映射的外部文件夹,不参与规则分类。
+            // 规则引擎不会把外部文件路径匹配到 portal fence,跳过避免被清空。
+            if (tab.IsPortalMode) continue;
+
             var filesToRemove = tab.Files
                 .Where(f =>
                 {

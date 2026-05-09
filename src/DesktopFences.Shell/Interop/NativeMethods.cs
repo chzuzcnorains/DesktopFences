@@ -229,6 +229,43 @@ internal static class NativeMethods
         ref Guid riid,
         [MarshalAs(UnmanagedType.Interface)] out object ppv);
 
+    // --- IShellItemImageFactory (Vista+ modern icon/thumbnail extraction) ---
+    public static readonly Guid IID_IShellItemImageFactory = new("BCC18B79-BA16-442F-80C4-8A59C30C463B");
+
+    [Flags]
+    public enum SIIGBF
+    {
+        ResizeToFit   = 0x00000000,
+        BiggerSizeOk  = 0x00000001,
+        MemoryOnly    = 0x00000002,
+        IconOnly      = 0x00000004,
+        ThumbnailOnly = 0x00000008,
+        InCacheOnly   = 0x00000010,
+        CropToSquare  = 0x00000020,
+        WideThumbnails = 0x00000040,
+        IconBackground = 0x00000080,
+        ScaleUp        = 0x00000100,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE
+    {
+        public int cx;
+        public int cy;
+        public SIZE(int cx, int cy) { this.cx = cx; this.cy = cy; }
+    }
+
+    [ComImport]
+    [Guid("BCC18B79-BA16-442F-80C4-8A59C30C463B")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IShellItemImageFactory
+    {
+        [PreserveSig]
+        int GetImage(SIZE size, SIIGBF flags, out IntPtr phbm);
+    }
+
+    // Note: DeleteObject is declared further down in the file (used for HBITMAP cleanup).
+
     // --- SHFileOperation (recycle bin) ---
     public const int FO_DELETE = 0x0003;
     public const ushort FOF_ALLOWUNDO = 0x0040;

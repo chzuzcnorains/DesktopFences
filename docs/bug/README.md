@@ -19,6 +19,9 @@
 | 11 | [切换图标风格后已显示的 tile 不刷新](icon_style_switch_no_refresh.md) | 外观设置切 App ↔ System 风格保存后，已渲染的文件 tile 不切模板，必须重启或刷新数据才生效 | 已修复 | 2026-05-07 |
 | 12 | [模糊强度 > 0 时颜色/透明度调整失效](acrylic_masks_color_opacity.md) | 设置模糊强度后，背景色调和透明度滑块完全不生效，fence 始终是灰白磨砂玻璃；Acrylic 在 Win11 22H2+ 加了 luminosity tint 层覆盖 WPF 背景 | 已修复 | 2026-05-07 |
 | 13 | [设置模糊强度后 panel 圆角丢失](blur_corners_squared.md) | 启用 BlurBehind 后 fence 四个圆角变方，因为 DWM blur 早于 WPF 渲染，WPF 的 CornerRadius 截断不了；用 SetWindowRgn 给窗口本身设圆角剪裁区域解决 | 已修复 | 2026-05-07 |
+| 14 | [右键托盘小图标导致 fence 浮到最大化窗口之上](tray_right_click_fences_pop_to_front.md) | 其他程序最大化时右键系统托盘小图标，所有 fence/overlay 被强行拉到 HWND_TOPMOST。原因：非 topmost 分支 hoist 触发条件包含了 Shell_TrayWnd；点托盘前 foreground 会短暂切到任务栏 | 已修复 | 2026-05-09 |
+| 15 | [文件图标显示与系统关联不一致](icon_wrong_app_association.md) | `.docx` 显示红色 MS Word 图标而非已设默认的 WPS 蓝图标。两段式：①ShellIconExtractor 改用 IShellItemImageFactory 解决抽图模糊；② 把 Shell 风格暴露到外观设置 picker 与 fence 菜单 | 已修复 | 2026-05-09 |
+| 16 | [保存设置后 Portal Fence 内容被清空](portal_files_wiped_after_save_settings.md) | Portal fence 在保存任意设置（IconStyle、Hue 等）后立刻变空。SettingsWindow 保存按钮无条件 fire RulesSaved → ReEvaluateClassifiedFiles 把"不被任何规则匹配"的文件全部 RemoveFile，portal 的外部文件夹文件首当其冲 | 已修复 | 2026-05-09 |
 
 ## 常见问题说明
 

@@ -6,7 +6,9 @@
       "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git show 0f7ebee -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
       "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git log --oneline -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
       "PowerShell(cd d:\\\\Workspace_VSCode\\\\DesktopFences; git show c4af737 -- src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(Select-Object -Last 30)",
+      "PowerShell(Get-Content \"$env:APPDATA\\\\DesktopFences\\\\settings.json\" -ErrorAction SilentlyContinue | Select-String -Pattern \"IconStyle|UseCustomFileIcons\")"
     ]
   }
 }

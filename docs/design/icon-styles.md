@@ -5,9 +5,9 @@
 
 ## 目标
 
-让 Fence 内文件 tile 的视觉风格可在「App 自绘彩色 tile」与「System 经典 page-with-fold」之间一键切换；保留旧的 Shell 系统图标作为隐藏 fallback（仅可通过手编 `settings.json` 启用）。
+让 Fence 内文件 tile 的视觉风格可在「App 自绘彩色 tile」「System 经典 page-with-fold」「Shell 真实系统图标」之间一键切换。
 
-每个 fence 还可以单独覆盖全局风格(Phase 13),用于「文档类用 App、下载类用 System」等混合场景。
+每个 fence 还可以单独覆盖全局风格(Phase 13),用于「文档类用 App、下载类用 Shell」等混合场景。
 
 ## 三种风格
 
@@ -15,9 +15,9 @@
 |---|---|---|---|
 | `App` | 彩色圆角 tile + 字母叠加（DOC / IMG / EXE…）；颜色由 `FileKindToIconConverter` 按扩展名映射 | `Themes/FileTypes.xaml` | `CustomFileTile`（FencePanel.xaml） |
 | `System` | Windows 经典 page+fold 形状 + 底部彩色徽章 + 字母叠加；图片/视频/exe/folder 用专属造型 | `Themes/SystemFileTypes.xaml` | `SystemFileTile`（FencePanel.xaml） |
-| `Shell` | `SHGetFileInfo` 抽出来的真实系统图标（与 Windows 资源管理器一致） | `Shell/Icon/ShellIconExtractor` | `ShellFileTile`（FencePanel.xaml） |
+| `Shell` | `IShellItemImageFactory::GetImage` 抽出来的真实系统图标（与 Windows 资源管理器完全一致），自动反映已安装应用的关联（如 WPS Office 的 .docx 蓝图标） | `Shell/Desktop/ShellIconExtractor` | `ShellFileTile`（FencePanel.xaml） |
 
-UI 上仅暴露 App / System 双卡片；Shell 仍保留代码路径作 fallback。
+三种风格在外观设置 picker 中均可选；fence 标题栏菜单的「图标风格 ▶」也提供同样三种选项再加「跟随全局」。
 
 ## 数据模型
 
@@ -103,18 +103,17 @@ Resources["UseCustomFileIcons"] = settings.UseCustomFileIcons;
 
 `Controls/Settings/AppearanceSettingsPane`:
 
-- 「图标风格 · Icon style」卡片,2 列 UniformGrid 双卡片
+- 「图标风格 · Icon style」卡片,3 列 UniformGrid 三卡片(App / System / Shell)
 - 卡片复用 `TabStyleTileStyle`(active 态有 accent 边框 + 浅蓝高亮)
-- `_iconStyle` 字段在 `Load`/`Save`/`BuildSnapshot` 中流转
-- `Load` 把持久化的 `Shell` clamp 回 `App`(picker 不暴露 Shell)
+- `_iconStyle` 字段在 `Load`/`Save`/`BuildSnapshot` 中流转,直接读写 `s.IconStyle`,无 clamp
 
 ## 决策记录
 
 1. **为什么不直接用 Win32 SHGetFileInfo + theming?**
    原型设计要求 system 风格是「Windows 经典」(Win98/XP 风格的 page+fold),不是当前 Win11 的 fluent shell 图标。自绘 DrawingImage 给我们对配色/字母叠加的完全控制。
 
-2. **为什么 Shell 是 hidden fallback?**
-   Shell 风格依赖 LRU cache + 异步加载,在 50+ 个文件的 Fence 上会闪烁;App / System 是 DrawingImage,瞬间渲染。但 Shell 对小众文件类型(自定义 ICO 关联程序)是唯一能拿到真图标的途径,所以保留 setter 渠道。
+2. **为什么后来把 Shell 暴露到 UI?**
+   Phase 12 当时把 Shell 藏起来是因为 `SHGetFileInfo + SHGFI_LARGEICON` 抽到的 32×32 图被 WPF 拉到 72 物理像素后明显模糊,且 50+ 文件 fence 上的异步加载会闪。2026-05-09 切到 `IShellItemImageFactory::GetImage` 后(改在 `ShellIconExtractor`),源图直接是 96 px 由 shell 自己缩到目标尺寸,清晰度与 Explorer 一致;同时用户对"我装了 WPS,fence 里就该看到 WPS 蓝图标"有明确诉求,App / System 那种按扩展名硬映射的策略无法满足。LRU 缓存 + IsAsync binding 仍然存在,闪烁面在重启后小很多,可接受。
 
 3. **为什么字母不烘焙进 SVG?**
    烘焙 14 × N 种字母组合会让 XAML 资源文件爆炸;由 DataTemplate 的 TextBlock 叠加,只需要一份 DrawingImage + 一个 `SystemBadgeText` 字符串。
@@ -181,14 +180,13 @@ public override DataTemplate? SelectTemplate(object item, DependencyObject conta
 | 跟随全局 | `null` |
 | App 自绘 | `FileIconStyle.App` |
 | System 经典 | `FileIconStyle.System` |
+| Shell 真实 | `FileIconStyle.Shell` |
 
 `MenuItem.IsChecked` 实时读 `vm.IconStyleOverride`(`null` 对应「跟随全局」)。点击后:
 
 1. `vm.IconStyleOverride = ...`
 2. `RefreshFileTileTemplate()`(同步,不依赖 PropertyChanged 通知)
 3. `InteractionEnded?.Invoke()` → 触发 `RequestAutoSave`
-
-Shell 风格不在菜单中暴露,沿用 Phase 12 决策。
 
 ### 全局变化的联动
 

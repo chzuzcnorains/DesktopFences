@@ -19,3 +19,5 @@
 - [Phase 12: iconStyle 双卡片选择器 + System 图标资源](phase-12.md) ✅
 - [Phase 13: 按 Fence 覆盖 IconStyle](phase-13.md) ✅
 - [Phase 11 Polish: blur API 二值化 + 失败降级 + helper 抽取](phase-11-polish.md) ✅
+- [Phase 12 Polish: Shell 抽图改用 IShellItemImageFactory + Shell 风格解禁到 UI](phase-12-polish.md) ✅
+- [Phase 13 Polish: Tab 拖拽排序 + Portal 规则隔离修复](phase-13-polish.md) ✅

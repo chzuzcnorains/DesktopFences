@@ -69,7 +69,17 @@
       "Bash(taskkill /f /pid 31264)",
       "PowerShell(Stop-Process *)",
       "Bash(git show *)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(git reset *)",
+      "Bash(git push *)",
+      "PowerShell(Join-Path *)",
+      "PowerShell(Start-Process -FilePath 'D:\\\\Workspace_VSCode\\\\DesktopFences\\\\src\\\\DesktopFences.App\\\\bin\\\\Debug\\\\net9.0-windows\\\\DesktopFences.App.exe')",
+      "PowerShell(dotnet build *)",
+      "Bash(gh pr *)",
+      "PowerShell(gh pr *)",
+      "PowerShell(git add *)",
+      "PowerShell(dotnet test *)",
+      "PowerShell(git push *)"
     ]
   }
 }

@@ -39,6 +39,7 @@ public partial class AppearanceSettingsPane : UserControl
     [
         new(FileIconStyle.App,    "App",    "彩色圆角 tile + 字母叠加"),
         new(FileIconStyle.System, "System", "Windows 经典 page-with-fold + 角标"),
+        new(FileIconStyle.Shell,  "Shell",  "Explorer 真实系统图标"),
     ];
 
     private string _accentColor = Swatches[0].Hex;
@@ -60,8 +61,7 @@ public partial class AppearanceSettingsPane : UserControl
 
         _accentColor = string.IsNullOrWhiteSpace(s.AccentColor) ? Swatches[0].Hex : s.AccentColor;
         _tabStyle = s.TabStyle;
-        // System 与 App 双卡可见;Shell 是隐藏 fallback,picker 仅在两者间切。
-        _iconStyle = s.IconStyle == FileIconStyle.Shell ? FileIconStyle.App : s.IconStyle;
+        _iconStyle = s.IconStyle;
 
         HueSlider.Value      = Math.Max(0, Math.Min(360, s.FenceBgHue));
         OpacitySlider.Value  = Math.Max(0.20, Math.Min(0.90, s.FenceOpacity));

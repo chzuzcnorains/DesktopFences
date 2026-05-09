@@ -54,6 +54,8 @@ public partial class FencePanel : UserControl
 
     /// <summary>Allow FenceHost to raise InteractionStarted (e.g. tab strip drag).</summary>
     public void RaiseInteractionStarted() => InteractionStarted?.Invoke();
+    /// <summary>Allow FenceHost to raise InteractionEnded (e.g. tab strip drag commit) so RequestAutoSave fires.</summary>
+    public void RaiseInteractionEnded() => InteractionEnded?.Invoke();
     public ShellIconExtractor? IconExtractor { get; set; }
 
     // ── Snap support for resize ──────────────────────────────
@@ -831,13 +833,11 @@ public partial class FencePanel : UserControl
     }
 
     /// <summary>
-    /// Phase 13: build the "图标风格" submenu (跟随全局 / App 自绘 / System 经典).
+    /// Phase 13: build the "图标风格" submenu (跟随全局 / App 自绘 / System 经典 / Shell 真实).
     /// Reads the current per-fence override from <see cref="FencePanelViewModel.IconStyleOverride"/>
     /// for IsChecked state. Selecting an item updates the ViewModel, refreshes
     /// the file-tile templates, and fires <see cref="InteractionEnded"/> to
     /// trigger persistence via the host's RequestAutoSave path.
-    /// Shell style is intentionally not exposed here — it stays a hidden
-    /// fallback configurable only by editing the saved JSON.
     /// </summary>
     private MenuItem BuildIconStyleSubmenu()
     {
@@ -850,9 +850,10 @@ public partial class FencePanel : UserControl
         var darkItemStyle = Application.Current?.TryFindResource("DarkMenuItemStyle") as Style;
         var current = ViewModel?.IconStyleOverride;
 
-        AddChoice(root, darkItemStyle, "跟随全局", null,                  current);
-        AddChoice(root, darkItemStyle, "App 自绘", FileIconStyle.App,    current);
-        AddChoice(root, darkItemStyle, "System 经典", FileIconStyle.System, current);
+        AddChoice(root, darkItemStyle, "跟随全局",     null,                    current);
+        AddChoice(root, darkItemStyle, "App 自绘",     FileIconStyle.App,       current);
+        AddChoice(root, darkItemStyle, "System 经典",  FileIconStyle.System,    current);
+        AddChoice(root, darkItemStyle, "Shell 真实",   FileIconStyle.Shell,     current);
 
         return root;
     }

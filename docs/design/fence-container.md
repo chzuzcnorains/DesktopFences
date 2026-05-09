@@ -31,6 +31,12 @@
 - **双击文件图标**：ShellExecute 打开文件
 - **拖入文件**：从 Explorer / 桌面拖入文件到 Fence
 - **拖出文件**：从 Fence 拖出文件到 Explorer / 桌面 / 其他 Fence
+- **Tab 拖拽排序**：Tab 数 ≥ 2 时，按住 tab 按钮拖动超过 `SystemParameters.MinimumHorizontalDragDistance` 后激活拖拽，TabStrip 上 accent 色细竖线作为插入指示符跟随鼠标；释放时把 tab 移到目标缝隙，写入 `_tabs[i].Model.TabOrder = i` 并通过 `FenceContent.RaiseInteractionEnded()` 触发 `RequestAutoSave`。普通点击（位移未到阈值）走原 `Click` 切换 active tab，不被误判。
+  - 实现位置：[FenceHost.xaml.cs](../../src/DesktopFences.UI/Controls/FenceHost.xaml.cs)（`OnTabStripPreviewMouseMove` / `OnTabStripPreviewMouseLeftButtonUp` / `ComputeTabDropIndex` / `PositionTabDropIndicator`）+ [FenceHost.xaml](../../src/DesktopFences.UI/Controls/FenceHost.xaml) 中的 `TabDropIndicator` Rectangle
+  - 仅同 fence 内重排序；跨 fence 的 tab 移动由现有 fence-overlap 合并 / TabDetachRequested 路径承担
+  - **监听挂在 FenceHost (Window) 级别**：`AddHandler(PreviewMouseMoveEvent / PreviewMouseLeftButtonUpEvent, ..., handledEventsToo: true)`。挂在 `TabStrip` 上的版本会因 Button 内部 mouse-capture + Handled 标记而错过 mouse up
+  - **Capture target 为 Window，mode 为 `CaptureMode.SubTree`**：`Mouse.Capture(this, CaptureMode.SubTree)`——SubTree 模式保留子控件的事件路由（鼠标悬停子按钮仍生效），但保证 mouse up 一定路由到 Window 级 handler
+  - **dropIndex 在虚拟序列上计算**（剔除被拖 tab 后的剩余序列），唯一 noop 条件是 `dropIndex == from`。这样拖到相邻位置也能生效，避免"看似拖了但没动"的体验
 
 ## 3. 文件图标渲染
 

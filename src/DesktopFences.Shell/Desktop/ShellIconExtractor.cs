@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -77,7 +78,75 @@ public sealed class ShellIconExtractor
         return string.IsNullOrEmpty(ext) ? "__no_ext__" : ext;
     }
 
+    // Target physical-pixel size for the large variant. Render target is 48 DIP
+    // (= 48px @ 100% DPI, 60px @ 125%, 72px @ 150%, 96px @ 200%). Asking for 96 means
+    // WPF only ever downscales, never upscales — and downscaling is what produces crisp
+    // results regardless of display DPI.
+    private const int LargeIconPixelSize = 96;
+    private const int SmallIconPixelSize = 32;
+
     private static ImageSource? ExtractIcon(string filePath, bool large)
+    {
+        // Modern path: IShellItemImageFactory::GetImage — same code Explorer uses.
+        // The shell decides which icon resource to pick and scales it for us, which
+        // avoids the "padded jumbo" problem that plagues SHGetImageList(SHIL_JUMBO).
+        var icon = ExtractViaShellItemImageFactory(filePath, large);
+        if (icon is not null) return icon;
+
+        // Fallback: legacy SHGetFileInfo + HICON.
+        return ExtractIconViaShGetFileInfo(filePath, large);
+    }
+
+    private static ImageSource? ExtractViaShellItemImageFactory(string filePath, bool large)
+    {
+        // SHCreateItemFromParsingName needs a real path. For non-existent paths the
+        // legacy fallback (SHGetFileInfo + SHGFI_USEFILEATTRIBUTES) handles by-extension
+        // lookup correctly; this modern API doesn't.
+        if (!File.Exists(filePath) && !Directory.Exists(filePath))
+            return null;
+
+        var iid = NativeMethods.IID_IShellItemImageFactory;
+        int hr = NativeMethods.SHCreateItemFromParsingName(filePath, IntPtr.Zero, ref iid, out object? itemObj);
+        if (hr != 0 || itemObj is null)
+            return null;
+
+        try
+        {
+            if (itemObj is not NativeMethods.IShellItemImageFactory factory)
+                return null;
+
+            int px = large ? LargeIconPixelSize : SmallIconPixelSize;
+            var size = new NativeMethods.SIZE(px, px);
+            // IconOnly: never substitute a thumbnail (we cache by extension, so
+            // per-file thumbnails would all collide on one cache key anyway).
+            // BiggerSizeOk: let shell return its native resolution if larger; we'll
+            // still downscale to the render target.
+            var flags = NativeMethods.SIIGBF.IconOnly | NativeMethods.SIIGBF.BiggerSizeOk;
+
+            hr = factory.GetImage(size, flags, out IntPtr hbitmap);
+            if (hr != 0 || hbitmap == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                var source = Imaging.CreateBitmapSourceFromHBitmap(
+                    hbitmap, IntPtr.Zero, Int32Rect.Empty,
+                    BitmapSizeOptions.FromEmptyOptions());
+                source.Freeze();
+                return source;
+            }
+            finally
+            {
+                NativeMethods.DeleteObject(hbitmap);
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(itemObj);
+        }
+    }
+
+    private static ImageSource? ExtractIconViaShGetFileInfo(string filePath, bool large)
     {
         var flags = NativeMethods.SHGFI_ICON |
                     NativeMethods.SHGFI_ADDOVERLAYS |
@@ -91,7 +160,7 @@ public sealed class ShellIconExtractor
             filePath,
             NativeMethods.FILE_ATTRIBUTE_NORMAL,
             ref shfi,
-            (uint)System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.SHFILEINFO>(),
+            (uint)Marshal.SizeOf<NativeMethods.SHFILEINFO>(),
             flags);
 
         if (result == IntPtr.Zero || shfi.hIcon == IntPtr.Zero)

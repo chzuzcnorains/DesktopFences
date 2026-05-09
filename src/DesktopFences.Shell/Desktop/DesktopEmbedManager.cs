@@ -71,12 +71,21 @@ public sealed class DesktopEmbedManager : IDisposable
                 if (_isTopmost || _isPeekActive || _isDragging || _pendingTopmost) return;
                 if (_managedWindows.Count == 0) return;
 
-                if (WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
+                var foreground = NativeMethods.GetForegroundWindow();
+                if (WindowClassUtil.IsDesktopWindow(foreground))
                 {
-                    // 桌面/任务栏前台时，窗口可能已被 DWM 压到壁纸下。主动用 HWND_TOPMOST
-                    // 把它们拉回；不修改 _isTopmost——切到普通窗口时由
+                    // 真桌面前台 (Progman/WorkerW/SHELLDLL_DefView/SysListView32)：
+                    // 窗口可能已被 DWM 压到壁纸下，主动用 HWND_TOPMOST 拉回；
+                    // 不修改 _isTopmost——切到普通窗口时由
                     // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
                     HoistAllAboveDesktop();
+                }
+                else if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
+                {
+                    // 任务栏 / 任务栏菜单前台（典型：右键托盘小图标时 foreground 短暂切到 Shell_TrayWnd）：
+                    // 不主动 hoist——其他程序最大化时若 hoist，fence 会抢到 topmost
+                    // 浮在最大化窗口之上 (bug: tray_right_click_fences_pop_to_front)。
+                    // SendToBottom 在任务栏前台时本身就是 no-op，这里直接跳过。
                 }
                 else
                 {
@@ -266,15 +275,23 @@ public sealed class DesktopEmbedManager : IDisposable
         }
         else
         {
-            // 前台变成桌面/任务栏（典型场景：截图工具关闭后前台立刻回到 Progman）。
-            // 此时窗口可能已经被 DWM 压到壁纸下，必须主动用 HWND_TOPMOST 把它们拉回。
-            // 不修改 _isTopmost——这是"借用 topmost"，由后续切到普通窗口时
-            // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
-            if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
+            // 真桌面前台（Progman/WorkerW/SHELLDLL_DefView/SysListView32）：
+            // 典型场景是截图工具或最大化窗口关闭后 foreground 立刻回到 Progman；
+            // 此时窗口可能已被 DWM 压到壁纸下，主动用 HWND_TOPMOST 拉回。
+            // 不修改 _isTopmost——切到普通窗口时由 OnDebouncedForegroundRecovery
+            // → SendToBottom(HWND_BOTTOM) 自动降级。
+            if (WindowClassUtil.IsDesktopWindow(hwnd))
             {
                 HoistAllAboveDesktop();
                 return;
             }
+
+            // 任务栏 / 任务栏菜单前台（典型：右键托盘小图标时 foreground 短暂切到
+            // Shell_TrayWnd）：不要 hoist——其他程序最大化时若 hoist，fence 会抢到
+            // topmost 浮在最大化窗口之上 (bug: tray_right_click_fences_pop_to_front)。
+            // 也不要 SendToBottom——任务栏前台时 HWND_BOTTOM 同样可能被 DWM 推到壁纸下。
+            if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
+                return;
 
             // Debounce z-order recovery: wait 200ms to coalesce rapid foreground changes
             StartForegroundDebounce();
