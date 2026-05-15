@@ -438,11 +438,16 @@ public sealed class DesktopEmbedManager : IDisposable
     /// 让一个新创建的窗口立刻可见在桌面之上，专为"用户主动新建 Fence"路径使用
     /// （托盘菜单的"新建 Fence" / "新建文件夹映射 Fence..." / 规则触发创建）。
     ///
-    /// Windows 11 上当桌面 (Progman/WorkerW) 或任务栏 (Shell_TrayWnd) 是前台时，
-    /// 对 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE 窗口调用 SetWindowPos(HWND_TOP) 仍可
-    /// 能被 DWM 推到桌面壁纸层下方，导致窗口看不见。本方法用 HWND_TOPMOST 绕开壁纸层
-    /// 压制确保新窗口立刻可见，并跟踪此 hwnd —— 当用户随后切到任意普通窗口时，
-    /// OnForegroundChanged 会调用 SendToBottom，HWND_BOTTOM 会自动清除 topmost 状态。
+    /// Windows 11 上 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE 窗口在被 SetWindowPos(HWND_TOP/BOTTOM)
+    /// 时可能被 DWM 推到桌面壁纸层下方导致看不见 —— 桌面/任务栏前台时已被验证不可靠；
+    /// 托盘菜单关闭瞬间 foreground 处于过渡态（Shell_TrayWnd 短暂切回原 owner 应用），
+    /// 即便 GetForegroundWindow() 返回"普通窗口"，HWND_BOTTOM 仍可能在此过渡态下被推到
+    /// 壁纸下方。因此本方法 **统一用 HWND_TOPMOST** 绕开壁纸层压制，确保新窗口立刻可见。
+    ///
+    /// topmost 状态由既有机制自动清除：
+    /// - 用户切到任意普通窗口 → OnForegroundChanged → OnDebouncedForegroundRecovery
+    ///   → SendToBottom(HWND_BOTTOM) 隐含降级 topmost；
+    /// - 5 秒 z-order 恢复定时器在普通窗口前台时也兜底执行同样动作。
     ///
     /// 启动加载、ToggleAllFences 等路径不应调用本方法，以免污染常规 z-order。
     /// </summary>
@@ -453,27 +458,7 @@ public sealed class DesktopEmbedManager : IDisposable
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
         }
 
-        var foreground = NativeMethods.GetForegroundWindow();
-        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
-        {
-            // 桌面/任务栏前台 —— HWND_TOP 不可靠，用 HWND_TOPMOST。
-            // OnForegroundChanged → SendToBottom 会在用户切到普通窗口时通过
-            // HWND_BOTTOM 自动清除 topmost。
-            NativeMethods.SetWindowPos(
-                hwnd, NativeMethods.HWND_TOPMOST,
-                0, 0, 0, 0,
-                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-        }
-        else
-        {
-            // 前台是普通窗口，正常逻辑已经够用 —— 直接放回 z-order 底部
-            NativeMethods.SetWindowPos(
-                hwnd, NativeMethods.HWND_BOTTOM,
-                0, 0, 0, 0,
-                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE |
-                NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
-        }
+        HoistSingleAboveDesktop(hwnd);
     }
 
     private static void SendToBottom(IntPtr hwnd)

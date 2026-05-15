@@ -54,18 +54,17 @@ TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTO
 
 ### "让窗口可见"的统一策略
 
-Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是前台时，对 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 窗口调用 `SetWindowPos(HWND_TOP)` 或 `HWND_BOTTOM` 都会被 DWM 推到桌面壁纸下方。因此统一采用"前台桌面/任务栏用 `HWND_TOPMOST`、前台普通窗口用 `HWND_BOTTOM`"的策略：
+Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是前台时，对 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 窗口调用 `SetWindowPos(HWND_TOP)` 或 `HWND_BOTTOM` 都会被 DWM 推到桌面壁纸下方。策略按**调用路径**分而非按当前 foreground 分：
 
-- **前台是桌面/任务栏** → `SetWindowPos(HWND_TOPMOST, SWP_SHOWWINDOW)`：绕开壁纸层压制
-- **前台是普通窗口** → `SetWindowPos(HWND_BOTTOM, SWP_SHOWWINDOW)`：放回正常 z-order 底部
+- **用户主动新建路径**（`BringNewWindowToFront`）→ 统一 `SetWindowPos(HWND_TOPMOST, SWP_SHOWWINDOW)`：托盘菜单刚关闭时 foreground 处于过渡态，即便 `GetForegroundWindow()` 返回普通窗口，`HWND_BOTTOM` 仍可能被 DWM 推到壁纸下（bug 24）。这条路径无法依赖 foreground 判定，必须 topmost 兜底
+- **常规可见路径**（`EnsureVisibleAboveDesktop` / `OnForegroundChanged` / 5 秒定时器）→ 按 foreground 分支：桌面/任务栏前台 → `HWND_TOPMOST`（绕开壁纸层压制）；普通窗口前台 → `HWND_BOTTOM`（放回正常 z-order 底部）。这条路径 foreground 已稳定，分支判定可靠
 - **清除 topmost**：切到任意普通窗口 → `OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM)`（`HWND_BOTTOM` 隐含降级 topmost，不需单独 `HWND_NOTOPMOST`）
 
 ### 应用此策略的路径
 
-所有让窗口可见的路径都统一采用此策略：
 1. **RegisterWindow**：所有新窗口（包括 `DesktopIconOverlay` 与 fence）启动时注册，确保立即可见
-2. **BringNewWindowToFront**：用户主动新建 Fence（托盘菜单"新建 Fence" / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）
-3. **EnsureVisibleAboveDesktop**：启动加载的 fence、`ToggleAllFences` 等常规路径
+2. **BringNewWindowToFront**（新建路径，统一 topmost）：用户主动新建 Fence（托盘菜单"新建 Fence" / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）
+3. **EnsureVisibleAboveDesktop**（常规路径，按 foreground 分支）：启动加载的 fence、`ToggleAllFences` 等
 4. **OnForegroundChanged（前台变成桌面/任务栏分支）**：截图工具关闭后前台立刻回到 Progman 这类场景，即时拉回
 5. **5 秒 z-order 恢复定时器（桌面前台分支）**：兜底机制，覆盖边界情况
 

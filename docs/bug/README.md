@@ -29,6 +29,7 @@
 | 21 | [设置窗口打开后未归档图标和 panel 图标无法选中](settings_modal_disables_fences.md) | 打开设置窗口后，fence panel 内文件图标和未归档图标层 (`DesktopIconOverlay`) 全部无法选中 / 双击 / 拖拽。**真因**：`SettingsWindow.ShowDialog()` 是 WPF 模态对话框，Win32 层会对同线程所有其他顶层窗口调用 `EnableWindow(FALSE)`，整个窗口在 OS 层就被排除在输入路由之外，与 bug 19 像素级 alpha=0 click-through 不同层。修复：改为 `Show()` 非模态，用字段缓存当前实例避免重复打开 | 已修复 | 2026-05-09 |
 | 22 | [最近关闭删除按钮样式与现有 UI 不一致](closed_fence_delete_button_style.md) | Fence 管理 → 最近关闭卡片的「删除」按钮回退到 WPF 默认灰白方角样式，与并排的「恢复」按钮（AccentButtonStyle 蓝色圆角）严重不协调。**真因**：`BuildClosedCard()` 代码后台 `new Button{}` 时未挂 Style，WPF 不会自动应用主题。修复：挂上已有的 `DangerButtonStyle`（与 Accent 同模板，红色背景），padding 对齐恢复按钮 | 已修复 | 2026-05-09 |
 | 23 | [托盘右键菜单样式与暗色 UI 不一致](tray_menu_dark_style.md) | 通知区右键菜单仍是 Windows 经典灰白原生外观。**真因**：托盘菜单是 WinForms `NotifyIcon.ContextMenuStrip`，WPF DarkTheme 样式对 WinForms 控件无效。修复：实现 `DarkTrayMenuRenderer`（自定义 `ProfessionalColorTable`+`ToolStripProfessionalRenderer`），色板与 DarkTheme 同源；动态刷新的子菜单（最近关闭、快照）每次 rebuild 后递归刷 `ForeColor`/`BackColor` | 已修复 | 2026-05-09 |
+| 24 | [托盘新建 Fence 后窗口被推到壁纸下方（bug 6 补全）](new_fence_invisible_normal_window_foreground.md) | 托盘右键"新建 Fence"后 fence 完全看不见，必须"双击桌面隐藏 + 双击桌面展示"才能拉回。**真因**：bug 6 修复时假设"普通窗口前台 → HWND_BOTTOM 安全"，但托盘菜单刚关闭瞬间 foreground 处于过渡态，DWM 仍把 HWND_BOTTOM 推到壁纸下方。`GetForegroundWindow()` 返回的"普通窗口" 无法反映 DWM 内部的"准桌面态"判定。修复：`BringNewWindowToFront` 不再按 foreground 分支，统一用 `HWND_TOPMOST` 拉到壁纸上方，依赖既有 `OnDebouncedForegroundRecovery → HWND_BOTTOM` 隐式降级 | 已修复 | 2026-05-15 |
 
 ## 常见问题说明
 
@@ -41,6 +42,7 @@
 3. 使用z-order恢复定时器，定期检查窗口是否可见，必要时进行恢复
 4. **`HWND_TOPMOST` 只用于"用户主动新建窗口"这类短暂场景**——如果在启动加载、`ToggleAllFences`、`DesktopIconOverlay` 等常规路径上也使用 topmost，会让 fence/overlay 一直浮动在普通应用之上，并连带破坏 Win+D 时桌面图标 overlay 的显示状态。修改全局 z-order 行为前先列出所有调用方
 5. **前台是桌面/任务栏时，z-order 自愈逻辑必须主动用 `HWND_TOPMOST` 拉回，而不是 return**——5 秒定时器与 `OnForegroundChanged` 桌面分支都应该这样做；topmost 由后续切到普通窗口时的 `HWND_BOTTOM` 自动降级清除
+6. **新建窗口路径不要用 `GetForegroundWindow()` 做分支** —— 托盘菜单刚关闭等"前台过渡态"瞬间，即使返回值是普通窗口，DWM 仍可能把 `HWND_BOTTOM` 推到壁纸下（bug 24）。用户主动新建路径统一走 `HWND_TOPMOST`，依靠后续 `OnDebouncedForegroundRecovery → HWND_BOTTOM` 隐式降级
 
 ### 窗口样式限制
 Fence窗口使用`WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`样式，这种窗口有以下限制：
