@@ -21,3 +21,4 @@
 - [Phase 11 Polish: blur API 二值化 + 失败降级 + helper 抽取](phase-11-polish.md) ✅
 - [Phase 12 Polish: Shell 抽图改用 IShellItemImageFactory + Shell 风格解禁到 UI](phase-12-polish.md) ✅
 - [Phase 13 Polish: Tab 拖拽排序 + Portal 规则隔离修复](phase-13-polish.md) ✅
+- [Phase 14: Fence 呈现方式切换（图标/列表/详细）+ 排序（字段 + 手动拖拽）](phase-14.md) ✅（代码完成，待手动验收）

@@ -79,7 +79,10 @@
       "PowerShell(gh pr *)",
       "PowerShell(git add *)",
       "PowerShell(dotnet test *)",
-      "PowerShell(git push *)"
+      "PowerShell(git push *)",
+      "PowerShell(try { $r = Invoke-RestMethod -Uri \"https://api.github.com/repos/chzuzcnorains/DesktopFences/pulls?state=open\" -Headers @{ \"User-Agent\" = \"claude-code\" } -ErrorAction Stop; if \\($r.Count -eq 0\\) { \"NO_OPEN_PRS\" } else { $r | Select-Object number, title, user, head, base | Format-List } } catch { \"ERROR: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(Test-Path *)",
+      "Bash(git *)"
     ]
   }
 }

@@ -21,6 +21,11 @@
     <sys:Double x:Key="FileTileWidth">88</sys:Double>
     <sys:Double x:Key="FileTileHeight">96</sys:Double>
 
+    <!-- ═════ Phase 14: List / Detail 视图尺寸（固定，不随 IconSize 缩放）═════ -->
+    <sys:Double x:Key="FileListItemWidth">168</sys:Double>
+    <sys:Double x:Key="FileListIconSize">18</sys:Double>
+    <sys:Double x:Key="DetailRowHeight">24</sys:Double>
+
     <!-- ═════ Converter 实例 ═════ -->
     <conv:FileKindToIconConverter x:Key="KindToIcon"/>
     <conv:SystemFileKindToIconConverter x:Key="SysKindToIcon"/>

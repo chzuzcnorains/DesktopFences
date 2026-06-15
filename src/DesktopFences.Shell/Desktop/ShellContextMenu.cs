@@ -32,51 +32,66 @@ public static class ShellContextMenu
             hr = SHBindToObject(IntPtr.Zero, pidlFolder, IntPtr.Zero, ref iidFolder, out var folderObj);
             if (hr != 0) return;
 
-            var folder = (IShellFolder)folderObj;
-            var fileName = Path.GetFileName(filePath);
-
-            int attrs = 0;
-            hr = folder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, fileName, out _, out var pidlChild, ref attrs);
-            if (hr != 0) return;
-
+            // COM RCW 必须确定性释放：每次右键都泄漏引用会累积到 GC 才回收
             try
             {
-                var pidls = new[] { pidlChild };
-                var iidCtxMenu = IID_IContextMenu;
-                hr = folder.GetUIObjectOf(hwndOwner, 1, pidls, ref iidCtxMenu, IntPtr.Zero, out var ctxObj);
-                if (hr != 0) return;
+                var folder = (IShellFolder)folderObj;
+                var fileName = Path.GetFileName(filePath);
 
-                var contextMenu = (IContextMenu)ctxObj;
-                var hMenu = NativeMethods.CreatePopupMenu();
+                int attrs = 0;
+                hr = folder.ParseDisplayName(IntPtr.Zero, IntPtr.Zero, fileName, out _, out var pidlChild, ref attrs);
+                if (hr != 0) return;
 
                 try
                 {
-                    contextMenu.QueryContextMenu(hMenu, 0, 1, 0x7FFF, 0); // CMF_NORMAL
+                    var pidls = new[] { pidlChild };
+                    var iidCtxMenu = IID_IContextMenu;
+                    hr = folder.GetUIObjectOf(hwndOwner, 1, pidls, ref iidCtxMenu, IntPtr.Zero, out var ctxObj);
+                    if (hr != 0) return;
 
-                    int cmd = NativeMethods.TrackPopupMenuEx(
-                        hMenu,
-                        NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_LEFTALIGN,
-                        screenX, screenY, hwndOwner, IntPtr.Zero);
-
-                    if (cmd > 0)
+                    try
                     {
-                        var ci = new CMINVOKECOMMANDINFO
+                        var contextMenu = (IContextMenu)ctxObj;
+                        var hMenu = NativeMethods.CreatePopupMenu();
+
+                        try
                         {
-                            cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
-                            lpVerb = (IntPtr)(cmd - 1),
-                            nShow = 1 // SW_SHOWNORMAL
-                        };
-                        contextMenu.InvokeCommand(ref ci);
+                            contextMenu.QueryContextMenu(hMenu, 0, 1, 0x7FFF, 0); // CMF_NORMAL
+
+                            int cmd = NativeMethods.TrackPopupMenuEx(
+                                hMenu,
+                                NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_LEFTALIGN,
+                                screenX, screenY, hwndOwner, IntPtr.Zero);
+
+                            if (cmd > 0)
+                            {
+                                var ci = new CMINVOKECOMMANDINFO
+                                {
+                                    cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
+                                    lpVerb = (IntPtr)(cmd - 1),
+                                    nShow = 1 // SW_SHOWNORMAL
+                                };
+                                contextMenu.InvokeCommand(ref ci);
+                            }
+                        }
+                        finally
+                        {
+                            NativeMethods.DestroyMenu(hMenu);
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(ctxObj);
                     }
                 }
                 finally
                 {
-                    NativeMethods.DestroyMenu(hMenu);
+                    Marshal.FreeCoTaskMem(pidlChild);
                 }
             }
             finally
             {
-                Marshal.FreeCoTaskMem(pidlChild);
+                Marshal.ReleaseComObject(folderObj);
             }
         }
         finally

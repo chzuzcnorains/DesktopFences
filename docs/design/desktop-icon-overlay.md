@@ -192,6 +192,8 @@ EndInternalMove(border, cancel: true);  // 取消内部移动，恢复原位
 _isDragging = true;
 
 var dataObject = new DataObject(DataFormats.FileDrop, new[] { filePath });
+// 内部拖拽标记（bug 27）：目标 fence 据此回报 Move，本侧才会移除 overlay 图标
+dataObject.SetData(InternalDragFormats.Marker, true);
 var result = DragDrop.DoDragDrop(border, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 
 if (result == DragDropEffects.Move)
@@ -200,6 +202,10 @@ if (result == DragDropEffects.Move)
     FileDraggedToFence?.Invoke(filePath);
 }
 ```
+
+> 拖入 fence = **移动**语义：`FencePanel.OnDrop` 检测到 `InternalDragFormats.Marker` 且实际
+> 新增条目时回报 `DragDropEffects.Move`，本侧据此移除 overlay 图标——修复了此前 OnDrop
+> 不设置 Effects 导致 `result == Move` 永不成立、图标残留的问题（bug 27）。
 
 ---
 

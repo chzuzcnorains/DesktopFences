@@ -198,11 +198,161 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Picks App / System / Shell based on global IconStyle resource. -->
+        <!-- ═════ Phase 14: List file tile — 小图标 + 单行文件名（纵向多列流式）═════
+             图标源按 fence 的 EffectiveIconStyle 切换（不带字母叠加，小尺寸不可读）。-->
+        <DataTemplate x:Key="ListFileTile">
+            <Border x:Name="ItemBorder"
+                    Width="{DynamicResource FileListItemWidth}"
+                    Height="22"
+                    Margin="1"
+                    CornerRadius="3"
+                    Background="Transparent"
+                    SnapsToDevicePixels="True"
+                    UseLayoutRounding="True"
+                    MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
+                    MouseRightButtonUp="FileItem_MouseRightButtonUp"
+                    MouseMove="FileItem_MouseMove"
+                    ToolTip="{Binding FilePath}">
+                <StackPanel Orientation="Horizontal" Margin="5,0" VerticalAlignment="Center">
+                    <Grid Width="{DynamicResource FileListIconSize}"
+                          Height="{DynamicResource FileListIconSize}"
+                          VerticalAlignment="Center">
+                        <Image x:Name="CustomIcon"
+                               Source="{Binding Extension, Converter={StaticResource KindToIcon}}"
+                               Visibility="Collapsed"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <Image x:Name="SystemIcon"
+                               Source="{Binding Extension, Converter={StaticResource SysKindToIcon}}"
+                               Visibility="Collapsed"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <Image x:Name="ShellIcon"
+                               Source="{Binding Icon, IsAsync=True}"
+                               Visibility="Collapsed"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Grid>
+                    <TextBlock Text="{Binding DisplayName}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               FontSize="11"
+                               Margin="7,0,0,0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="App">
+                    <Setter TargetName="CustomIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="System">
+                    <Setter TargetName="SystemIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="Shell">
+                    <Setter TargetName="ShellIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <Trigger SourceName="ItemBorder" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource HoverBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- ═════ Phase 14: Detail file tile — 单列行：图标+名称 / 大小 / 修改时间 ═════ -->
+        <DataTemplate x:Key="DetailFileTile">
+            <Border x:Name="ItemBorder"
+                    Height="{DynamicResource DetailRowHeight}"
+                    CornerRadius="2"
+                    Background="Transparent"
+                    HorizontalAlignment="Stretch"
+                    SnapsToDevicePixels="True"
+                    UseLayoutRounding="True"
+                    MouseLeftButtonDown="FileItem_MouseLeftButtonDown"
+                    MouseRightButtonUp="FileItem_MouseRightButtonUp"
+                    MouseMove="FileItem_MouseMove"
+                    ToolTip="{Binding FilePath}">
+                <Grid Margin="6,0,6,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="118"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid Width="{DynamicResource FileListIconSize}"
+                              Height="{DynamicResource FileListIconSize}"
+                              VerticalAlignment="Center">
+                            <Image x:Name="CustomIcon"
+                                   Source="{Binding Extension, Converter={StaticResource KindToIcon}}"
+                                   Visibility="Collapsed"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <Image x:Name="SystemIcon"
+                                   Source="{Binding Extension, Converter={StaticResource SysKindToIcon}}"
+                                   Visibility="Collapsed"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <Image x:Name="ShellIcon"
+                                   Source="{Binding Icon, IsAsync=True}"
+                                   Visibility="Collapsed"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Grid>
+                        <TextBlock Text="{Binding DisplayName}"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   FontSize="11"
+                                   Margin="7,0,0,0"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SizeDisplay}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               TextAlignment="Right"
+                               Margin="0,0,12,0"/>
+                    <TextBlock Grid.Column="2"
+                               Text="{Binding DateModifiedDisplay}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               TextAlignment="Left"/>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="App">
+                    <Setter TargetName="CustomIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="System">
+                    <Setter TargetName="SystemIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.EffectiveIconStyle, RelativeSource={RelativeSource AncestorType=ctrl:FencePanel}}" Value="Shell">
+                    <Setter TargetName="ShellIcon" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <Trigger SourceName="ItemBorder" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource HoverBrush}" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SelectedBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- ═════ Phase 14: ItemsPanel — 按 ViewMode 切换（见 FileListBox 的 Style）═════ -->
+        <ItemsPanelTemplate x:Key="IconItemsPanel">
+            <WrapPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="ListItemsPanel">
+            <!-- 纵向流式：列满换列，水平滚动（Explorer 列表视图行为）-->
+            <WrapPanel Orientation="Vertical" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="DetailItemsPanel">
+            <VirtualizingStackPanel Orientation="Vertical" />
+        </ItemsPanelTemplate>
+
+        <!-- Picks App / System / Shell (Icon view) or List / Detail per ViewMode. -->
         <ctrl:FileIconTemplateSelector x:Key="FileIconSelector"
                                        CustomTemplate="{StaticResource CustomFileTile}"
                                        SystemTemplate="{StaticResource SystemFileTile}"
-                                       ShellTemplate="{StaticResource ShellFileTile}"/>
+                                       ShellTemplate="{StaticResource ShellFileTile}"
+                                       ListTemplate="{StaticResource ListFileTile}"
+                                       DetailTemplate="{StaticResource DetailFileTile}"/>
         <Style x:Key="TitleBarVisibilityStyle" TargetType="{x:Type Border}">
             <Setter Property="Visibility" Value="Visible"/>
             <Style.Triggers>
@@ -283,6 +433,7 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition x:Name="TitleBarRow" Height="30" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -333,32 +484,84 @@
                     </Grid>
                 </Border>
 
+                <!-- Phase 14: Detail view column header (visible only in Detail mode).
+                     右侧 Margin 预留 ~14px 与垂直滚动条对齐。点击列头切换排序字段/方向。 -->
+                <Border x:Name="DetailHeader" Grid.Row="1" Margin="4,2,4,0"
+                        Background="{DynamicResource TitleBarBrush}" CornerRadius="3">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ViewMode}" Value="Detail">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid Margin="6,3,18,3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="118"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="HeaderName" Grid.Column="0" Text="名称" Tag="Name"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
+                                   Cursor="Hand" MouseLeftButtonUp="DetailHeader_Click"/>
+                        <TextBlock x:Name="HeaderSize" Grid.Column="1" Text="大小" Tag="Size"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
+                                   TextAlignment="Right" Margin="0,0,12,0"
+                                   Cursor="Hand" MouseLeftButtonUp="DetailHeader_Click"/>
+                        <TextBlock x:Name="HeaderDate" Grid.Column="2" Text="修改时间" Tag="DateModified"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11"
+                                   Cursor="Hand" MouseLeftButtonUp="DetailHeader_Click"/>
+                    </Grid>
+                </Border>
+
                 <!-- File icons area — ListBox with virtualization enabled.
-                     ItemTemplateSelector switches between CustomFileTile (self-drawn
-                     colored type tiles) and ShellFileTile (system icon) based on
-                     AppSettings.UseCustomFileIcons (applied via Application-level
-                     resource key UseCustomFileIcons). -->
+                     ItemTemplateSelector switches between Icon-style tiles and the
+                     Phase 14 List / Detail templates per fence ViewMode; the
+                     ItemsPanel / scrollbars are swapped by the Style below. -->
                 <ListBox x:Name="FileListBox"
-                         Grid.Row="1"
+                         Grid.Row="2"
                          ItemsSource="{Binding Files}"
                          ItemTemplateSelector="{StaticResource FileIconSelector}"
                          Background="Transparent"
                          BorderThickness="0"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                          VirtualizingPanel.IsVirtualizing="True"
                          VirtualizingPanel.VirtualizationMode="Recycling"
                          Margin="4,2,4,4">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
+                    <ListBox.Style>
+                        <Style TargetType="ListBox">
+                            <!-- Icon view (default): horizontal wrap, vertical scroll. -->
+                            <Setter Property="ItemsPanel" Value="{StaticResource IconItemsPanel}" />
+                            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ViewMode}" Value="List">
+                                    <!-- List view: vertical wrap into columns, horizontal scroll.
+                                         Pixel scrolling (CanContentScroll=False) keeps the
+                                         column overflow smooth. -->
+                                    <Setter Property="ItemsPanel" Value="{StaticResource ListItemsPanel}" />
+                                    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+                                    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+                                    <Setter Property="ScrollViewer.CanContentScroll" Value="False" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding ViewMode}" Value="Detail">
+                                    <!-- Detail view: single virtualized column, vertical scroll. -->
+                                    <Setter Property="ItemsPanel" Value="{StaticResource DetailItemsPanel}" />
+                                    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+                                    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ListBox.Style>
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Background" Value="Transparent" />
                             <Setter Property="Padding" Value="0" />
                             <Setter Property="Margin" Value="0" />
+                            <!-- Stretch lets Detail rows fill the column width. -->
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="ListBoxItem">
@@ -371,7 +574,7 @@
                 </ListBox>
 
                 <!-- Empty state hint -->
-                <TextBlock Grid.Row="1"
+                <TextBlock Grid.Row="2"
                            Foreground="{DynamicResource SubtleBorderBrush}"
                            FontSize="12"
                            HorizontalAlignment="Center"

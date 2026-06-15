@@ -136,8 +136,16 @@ public partial class FencePanel : UserControl
     /// </summary>
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(FencePanelViewModel.EffectiveIconStyle))
+        // Icon style OR view mode change → re-run the template selector so each
+        // tile picks up the right template (Recycling mode keeps stale ones).
+        if (e.PropertyName is nameof(FencePanelViewModel.EffectiveIconStyle)
+                           or nameof(FencePanelViewModel.ViewMode))
             RefreshFileTileTemplate();
+
+        // Sort field / direction change → refresh the Detail header ▲/▼ glyphs.
+        if (e.PropertyName is nameof(FencePanelViewModel.SortBy)
+                           or nameof(FencePanelViewModel.SortDirection))
+            UpdateSortGlyphs();
     }
 
     /// <summary>
@@ -286,8 +294,9 @@ public partial class FencePanel : UserControl
         renameItem.Click += (_, _) => BeginRename();
         menu.Items.Add(renameItem);
 
-        // Phase 13: per-fence icon style override
-        menu.Items.Add(BuildIconStyleSubmenu());
+        // Phase 13/14: per-fence icon style + view mode + sort submenus.
+        // Shared with the tab-strip menu (FenceHost) so both surfaces match.
+        AddViewSortMenuItems(menu.Items);
 
         menu.Items.Add(new Separator());
 
@@ -370,18 +379,36 @@ public partial class FencePanel : UserControl
         InteractionEnded?.Invoke();
     }
 
+    private RenameWindow? _renameWindow;
+
     /// <summary>
     /// Open rename dialog (called from title bar context menu or FenceHost tab context menu).
+    /// 非模态：ShowDialog 会让 Win32 对同线程所有顶层窗口 EnableWindow(FALSE)，
+    /// 重命名期间所有 fence 与桌面图标 overlay 都无法点击（bug 21 同根因，
+    /// 参见 docs/bug/settings_modal_disables_fences.md）。
     /// </summary>
     public void BeginRename()
     {
         if (ViewModel is null) return;
-        var dialog = new RenameWindow(ViewModel.Title);
-        if (dialog.ShowDialog() == true && dialog.NewName is not null)
+
+        // 已打开则置前复用，避免重复窗口
+        if (_renameWindow is not null)
         {
-            ViewModel.Title = dialog.NewName;
-            InteractionEnded?.Invoke();
+            _renameWindow.Activate();
+            return;
         }
+
+        var dialog = new RenameWindow(ViewModel.Title) { Owner = Window.GetWindow(this) };
+        dialog.RenameConfirmed += newName =>
+        {
+            if (ViewModel is null) return;
+            ViewModel.Title = newName;
+            InteractionEnded?.Invoke();
+        };
+        dialog.Closed += (_, _) => _renameWindow = null;
+        _renameWindow = dialog;
+        dialog.Show();
+        dialog.Activate();
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -546,7 +573,11 @@ public partial class FencePanel : UserControl
     {
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            e.Effects = DragDropEffects.Copy;
+            // 应用内拖拽（fence 间 / overlay→fence）按移动处理，源端在 DoDragDrop
+            // 返回 Move 后删除自己的条目；Explorer 来源保持复制引用。
+            e.Effects = e.Data.GetDataPresent(InternalDragFormats.Marker)
+                ? DragDropEffects.Move
+                : DragDropEffects.Copy;
             if (ViewModel is not null) ViewModel.IsDropHover = true;
         }
         else
@@ -567,16 +598,52 @@ public partial class FencePanel : UserControl
 
         if (ViewModel is null) return;
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        // GetDataPresent 为 true 时 GetData 在延迟渲染失败等场景仍可能返回 null
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
 
-        var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
-        foreach (var filePath in files)
+        bool isInternal = e.Data.GetDataPresent(InternalDragFormats.Marker);
+
+        // Phase 14c: self-drag within the same fence (non-portal) → reorder in
+        // place instead of add/remove. Report None so the source side never
+        // removes the (only) entry, and switch the fence to Manual order.
+        if (isInternal && !ViewModel.IsPortalMode && files.Length == 1
+            && e.Data.GetData(InternalDragFormats.SourceFenceId) is string sid
+            && Guid.TryParse(sid, out var srcId) && srcId == ViewModel.Id)
         {
-            ViewModel.AddFile(filePath);
-            LoadIconForLastFile();
+            int insertIndex = GetDropInsertIndex(e);
+            if (ViewModel.ReorderFile(files[0], insertIndex))
+            {
+                AnimateDropPulse();
+                InteractionEnded?.Invoke();
+            }
+            e.Effects = DragDropEffects.None;
+            e.Handled = true;
+            return;
         }
 
+        bool anyAdded = false;
+
+        foreach (var filePath in files)
+        {
+            if (ViewModel.ContainsFile(filePath)) continue;
+            var added = ViewModel.AddFile(filePath);
+            if (added is null) continue;
+            LoadIconFor(added);
+            anyAdded = true;
+        }
+
+        // Restore the active sort once after the batch (no-op in Manual mode).
+        if (anyAdded) ViewModel.ResortAfterChange();
+
+        // 内部拖拽 = 移动：回报 Move 让源端（另一个 fence / overlay）删除条目。
+        // 文件已在本 fence（含自拖自）时回报 None，否则源端会把唯一条目删掉。
+        // Explorer 来源永远回报 Copy——回报 Move 可能让 Explorer 删除磁盘源文件。
+        e.Effects = isInternal
+            ? (anyAdded ? DragDropEffects.Move : DragDropEffects.None)
+            : DragDropEffects.Copy;
+
         // Scale-in animation for the border on drop
-        AnimateDropPulse();
+        if (anyAdded) AnimateDropPulse();
         e.Handled = true;
     }
 
@@ -595,6 +662,9 @@ public partial class FencePanel : UserControl
         // Re-sync the title-bar row height in case ShowTitleBar was toggled
         // before the named row was reachable from the dependency-property callback.
         TitleBarRow.Height = ShowTitleBar ? new GridLength(30) : new GridLength(0);
+
+        // Phase 14: seed the Detail header sort indicator for the initial state.
+        UpdateSortGlyphs();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -619,6 +689,35 @@ public partial class FencePanel : UserControl
     private void OnHostDeactivated(object? sender, EventArgs e)
     {
         if (ViewModel is not null) ViewModel.IsFocused = false;
+    }
+
+    /// <summary>
+    /// Phase 14c: compute the "insert before" index for a self-drag drop. Hit-tests
+    /// the file under the cursor and decides before/after by the cursor's position
+    /// within that tile — X midline for Icon view (horizontal flow), Y midline for
+    /// List / Detail (vertical flow). A drop on empty space targets the end.
+    /// </summary>
+    private int GetDropInsertIndex(DragEventArgs e)
+    {
+        if (ViewModel is null) return 0;
+
+        var pos = e.GetPosition(FileListBox);
+        DependencyObject? d = FileListBox.InputHitTest(pos) as DependencyObject;
+        while (d is not null and not ListBoxItem)
+            d = VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d);
+
+        if (d is not ListBoxItem { DataContext: FileItemViewModel hit })
+            return ViewModel.Files.Count; // empty space → end
+
+        int hitIndex = ViewModel.Files.IndexOf(hit);
+        if (hitIndex < 0) return ViewModel.Files.Count;
+
+        var container = (FrameworkElement)d;
+        var posInItem = e.GetPosition(container);
+        bool after = ViewModel.ViewMode == ViewMode.Icon
+            ? posInItem.X > container.ActualWidth / 2
+            : posInItem.Y > container.ActualHeight / 2;
+        return after ? hitIndex + 1 : hitIndex;
     }
 
     private void AnimateDropPulse()
@@ -671,6 +770,11 @@ public partial class FencePanel : UserControl
     private void FileItem_MouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
+        // A tab drag in the host window captures the mouse (CaptureMode.SubTree),
+        // which still routes MouseMove here. Don't start a file OLE-drag in that
+        // case — it would hijack the tab tear-off and, dropped on the desktop,
+        // raise a same-file shell error ("源文件名和目标文件名相同").
+        if (_hostWindow is not null && ReferenceEquals(Mouse.Captured, _hostWindow)) return;
         if (sender is not FrameworkElement element || element.DataContext is not FileItemViewModel item)
             return;
 
@@ -685,6 +789,11 @@ public partial class FencePanel : UserControl
         _isDraggingFile = true;
 
         var dataObject = new DataObject(DataFormats.FileDrop, new[] { item.FilePath });
+        // 内部拖拽标记：目标 fence 据此回报 Move（移动语义），Explorer 会忽略该格式。
+        dataObject.SetData(InternalDragFormats.Marker, true);
+        // 来源 fence id：drop 落到同一 fence 时识别为"自拖自"→ 原地重排（Phase 14c）。
+        if (ViewModel is not null)
+            dataObject.SetData(InternalDragFormats.SourceFenceId, ViewModel.Id.ToString());
         var result = DragDrop.DoDragDrop(element, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 
         if (result == DragDropEffects.Move && ViewModel is not null)
@@ -703,8 +812,11 @@ public partial class FencePanel : UserControl
         ClearSelection();
         item.IsSelected = true;
 
+        var hostWindow = Window.GetWindow(this);
+        if (hostWindow is null) return; // 控件已脱离视觉树（fence 正在关闭）
+
         var screenPoint = element.PointToScreen(e.GetPosition(element));
-        var hwnd = new WindowInteropHelper(Window.GetWindow(this)!).Handle;
+        var hwnd = new WindowInteropHelper(hostWindow).Handle;
         ShellContextMenu.Show(hwnd, item.FilePath, (int)screenPoint.X, (int)screenPoint.Y);
 
         e.Handled = true;
@@ -722,26 +834,25 @@ public partial class FencePanel : UserControl
         }
     }
 
-    private void LoadIconForLastFile()
+    private void LoadIconFor(FileItemViewModel item)
     {
-        if (ViewModel is null || IconExtractor is null) return;
-        var last = ViewModel.Files.LastOrDefault();
-        if (last is not null && last.Icon is null)
-            last.Icon = IconExtractor.GetIcon(last.FilePath);
+        if (IconExtractor is null) return;
+        if (item.Icon is null)
+            item.Icon = IconExtractor.GetIcon(item.FilePath);
 
         // Scale-in animation for newly added file item
-        AnimateNewFileItem();
+        AnimateNewFileItem(item);
     }
 
-    private void AnimateNewFileItem()
+    private void AnimateNewFileItem(FileItemViewModel item)
     {
-        // Delay to let layout update, then animate the last item container
+        // Delay to let layout update, then animate the item's container.
+        // Resolved via ContainerFromItem (not index) so the animation still
+        // targets the right tile after a re-sort moves it off the end.
         Dispatcher.InvokeAsync(() =>
         {
-            if (ViewModel is null || ViewModel.Files.Count == 0) return;
-            var lastIndex = ViewModel.Files.Count - 1;
-            var container = FileListBox.ItemContainerGenerator.ContainerFromIndex(lastIndex) as FrameworkElement;
-            if (container is null) return;
+            if (FileListBox.ItemContainerGenerator.ContainerFromItem(item) is not FrameworkElement container)
+                return;
 
             var scale = new ScaleTransform(0.8, 0.8);
             container.RenderTransform = scale;
@@ -879,6 +990,185 @@ public partial class FencePanel : UserControl
             InteractionEnded?.Invoke();
         };
         parent.Items.Add(item);
+    }
+
+    /// <summary>
+    /// Phase 14: append the per-fence 图标风格 / 呈现方式 / 排序方式 submenus to a
+    /// menu's item collection. Shared by <see cref="ShowTitleBarMenu"/> (standalone /
+    /// MenuOnly tab) and FenceHost's tab-strip menu so both surfaces stay in sync.
+    /// The submenus bind to this panel's <c>ViewModel</c>; in tab mode FenceHost's
+    /// active tab is this panel's DataContext, so they target the right fence.
+    /// </summary>
+    public void AddViewSortMenuItems(System.Windows.Controls.ItemCollection items)
+    {
+        items.Add(BuildIconStyleSubmenu());
+        items.Add(BuildViewModeSubmenu());
+        items.Add(BuildSortSubmenu());
+    }
+
+    /// <summary>
+    /// Phase 14: build the "呈现方式" submenu — 图标 / 列表 / 详细信息. IsChecked
+    /// reflects the current <see cref="FencePanelViewModel.ViewMode"/>. Selecting
+    /// an item updates the ViewModel (which swaps ItemsPanel / templates via
+    /// bindings) and fires <see cref="InteractionEnded"/> for persistence.
+    /// </summary>
+    private MenuItem BuildViewModeSubmenu()
+    {
+        var root = new MenuItem
+        {
+            Header = "呈现方式",
+            Icon = BuildMenuIcon("IconGrid"),
+        };
+
+        var darkItemStyle = Application.Current?.TryFindResource("DarkMenuItemStyle") as Style;
+        var current = ViewModel?.ViewMode ?? ViewMode.Icon;
+
+        AddViewModeChoice(root, darkItemStyle, "图标", ViewMode.Icon, current);
+        AddViewModeChoice(root, darkItemStyle, "列表", ViewMode.List, current);
+        AddViewModeChoice(root, darkItemStyle, "详细信息", ViewMode.Detail, current);
+
+        return root;
+    }
+
+    private void AddViewModeChoice(MenuItem parent, Style? itemStyle, string label,
+                                   ViewMode value, ViewMode current)
+    {
+        var item = new MenuItem
+        {
+            Header = label,
+            IsCheckable = false,
+            IsChecked = value == current,
+        };
+        if (itemStyle is not null) item.Style = itemStyle;
+        item.Click += (_, _) =>
+        {
+            if (ViewModel is null || ViewModel.ViewMode == value) return;
+            ViewModel.ViewMode = value; // PropertyChanged → RefreshFileTileTemplate + Style triggers
+            InteractionEnded?.Invoke();
+        };
+        parent.Items.Add(item);
+    }
+
+    /// <summary>
+    /// Phase 14: build the "排序方式" submenu — sort field (名称 / 扩展名 / 大小 /
+    /// 修改时间 / 创建时间 / 手动排列) plus a 升序 / 降序 group. Field / direction
+    /// IsChecked reflects the current <see cref="FencePanelViewModel.SortBy"/> /
+    /// <see cref="FencePanelViewModel.SortDirection"/>. Selecting an item drives
+    /// the ViewModel (whose setter re-sorts) and fires <see cref="InteractionEnded"/>
+    /// for persistence. 手动排列 is disabled for portal fences; the direction items
+    /// are disabled while 手动排列 is active.
+    /// </summary>
+    private MenuItem BuildSortSubmenu()
+    {
+        var root = new MenuItem
+        {
+            Header = "排序方式",
+            Icon = BuildMenuIcon("IconRule"),
+        };
+
+        var darkItemStyle = Application.Current?.TryFindResource("DarkMenuItemStyle") as Style;
+        var currentField = ViewModel?.SortBy ?? SortField.Name;
+        bool isPortal = ViewModel?.IsPortalMode == true;
+
+        AddSortFieldChoice(root, darkItemStyle, "名称", SortField.Name, currentField);
+        AddSortFieldChoice(root, darkItemStyle, "扩展名", SortField.Extension, currentField);
+        AddSortFieldChoice(root, darkItemStyle, "大小", SortField.Size, currentField);
+        AddSortFieldChoice(root, darkItemStyle, "修改时间", SortField.DateModified, currentField);
+        AddSortFieldChoice(root, darkItemStyle, "创建时间", SortField.DateCreated, currentField);
+        var manualItem = AddSortFieldChoice(root, darkItemStyle, "手动排列", SortField.Manual, currentField);
+        manualItem.IsEnabled = !isPortal; // portals are folder-driven; manual order doesn't persist
+
+        // The menu.Opened styler only reaches top-level items, so style this
+        // nested separator explicitly to keep it dark.
+        var sep = new Separator();
+        if (Application.Current?.TryFindResource("DarkSeparatorStyle") is Style sepStyle)
+            sep.Style = sepStyle;
+        root.Items.Add(sep);
+
+        var currentDir = ViewModel?.SortDirection ?? SortDirection.Ascending;
+        bool dirEnabled = currentField != SortField.Manual;
+        AddSortDirectionChoice(root, darkItemStyle, "升序", SortDirection.Ascending, currentDir, dirEnabled);
+        AddSortDirectionChoice(root, darkItemStyle, "降序", SortDirection.Descending, currentDir, dirEnabled);
+
+        return root;
+    }
+
+    private MenuItem AddSortFieldChoice(MenuItem parent, Style? itemStyle, string label,
+                                        SortField value, SortField current)
+    {
+        var item = new MenuItem
+        {
+            Header = label,
+            IsCheckable = false,
+            IsChecked = value == current,
+        };
+        if (itemStyle is not null) item.Style = itemStyle;
+        item.Click += (_, _) =>
+        {
+            if (ViewModel is null || ViewModel.SortBy == value) return;
+            ViewModel.SortBy = value; // setter re-sorts (no-op for Manual)
+            InteractionEnded?.Invoke();
+        };
+        parent.Items.Add(item);
+        return item;
+    }
+
+    private void AddSortDirectionChoice(MenuItem parent, Style? itemStyle, string label,
+                                        SortDirection value, SortDirection current, bool enabled)
+    {
+        var item = new MenuItem
+        {
+            Header = label,
+            IsCheckable = false,
+            IsChecked = enabled && value == current,
+            IsEnabled = enabled,
+        };
+        if (itemStyle is not null) item.Style = itemStyle;
+        item.Click += (_, _) =>
+        {
+            if (ViewModel is null || ViewModel.SortDirection == value) return;
+            ViewModel.SortDirection = value; // setter re-sorts
+            InteractionEnded?.Invoke();
+        };
+        parent.Items.Add(item);
+    }
+
+    /// <summary>
+    /// Phase 14: Detail-view column header click. Clicking the active sort
+    /// column flips the direction; clicking another column sorts by it (the
+    /// ViewModel setter re-sorts). Fires <see cref="InteractionEnded"/> to persist.
+    /// </summary>
+    private void DetailHeader_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is null
+            || sender is not FrameworkElement fe
+            || fe.Tag is not string tag
+            || !Enum.TryParse<SortField>(tag, out var field))
+            return;
+
+        if (ViewModel.SortBy == field)
+            ViewModel.SortDirection = ViewModel.SortDirection == SortDirection.Ascending
+                ? SortDirection.Descending
+                : SortDirection.Ascending;
+        else
+            ViewModel.SortBy = field;
+
+        UpdateSortGlyphs(); // also fired via PropertyChanged, call here for immediacy
+        InteractionEnded?.Invoke();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Phase 14: refresh the Detail header sort indicators (▲ asc / ▼ desc) so
+    /// only the active column carries a glyph. No-op before the header is built.
+    /// </summary>
+    private void UpdateSortGlyphs()
+    {
+        if (ViewModel is null || HeaderName is null) return;
+        string glyph = ViewModel.SortDirection == SortDirection.Ascending ? " ▲" : " ▼";
+        HeaderName.Text = "名称" + (ViewModel.SortBy == SortField.Name ? glyph : "");
+        HeaderSize.Text = "大小" + (ViewModel.SortBy == SortField.Size ? glyph : "");
+        HeaderDate.Text = "修改时间" + (ViewModel.SortBy == SortField.DateModified ? glyph : "");
     }
 
     /// <summary>

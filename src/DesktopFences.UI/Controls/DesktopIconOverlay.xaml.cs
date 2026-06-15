@@ -98,9 +98,11 @@ public partial class DesktopIconOverlay : Window
             _dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
         }
 
-        // Register with embed manager for z-order (same as FenceHost)
+        // Register with embed manager for z-order (same as FenceHost).
+        // isOverlay: true → excluded from the WindowFromPoint occlusion self-heal probe
+        // (transparent/click-through center would falsely read as sunk — bug 19/35).
         var hwnd = new WindowInteropHelper(this).Handle;
-        _embedManager.RegisterWindow(hwnd);
+        _embedManager.RegisterWindow(hwnd, isOverlay: true);
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -330,6 +332,9 @@ public partial class DesktopIconOverlay : Window
             _isDragging = true;
 
             var dataObject = new DataObject(DataFormats.FileDrop, new[] { filePath });
+            // 内部拖拽标记：目标 fence 据此回报 Move，本侧才会移除 overlay 图标，
+            // 否则拖入 fence 后图标残留（fence 与 overlay 同时显示该文件）。
+            dataObject.SetData(InternalDragFormats.Marker, true);
             var result = DragDrop.DoDragDrop(border, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 
             if (result == DragDropEffects.Move)

@@ -28,8 +28,24 @@ public sealed class FileIconTemplateSelector : DataTemplateSelector
     public DataTemplate? SystemTemplate { get; set; }
     public DataTemplate? ShellTemplate { get; set; }
 
+    // Phase 14: List / Detail view templates. When the fence's ViewMode is
+    // List or Detail these win over the icon-style templates; the small icon
+    // inside them still honors EffectiveIconStyle via DataTriggers.
+    public DataTemplate? ListTemplate { get; set; }
+    public DataTemplate? DetailTemplate { get; set; }
+
     public override DataTemplate? SelectTemplate(object item, DependencyObject container)
     {
+        // ViewMode takes precedence over icon style for List / Detail.
+        var vm = FindAncestor<FencePanel>(container)?.DataContext as FencePanelViewModel;
+        switch (vm?.ViewMode)
+        {
+            case ViewMode.List when ListTemplate is not null:
+                return ListTemplate;
+            case ViewMode.Detail when DetailTemplate is not null:
+                return DetailTemplate;
+        }
+
         var style = ResolveStyle(container);
         return style switch
         {

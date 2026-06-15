@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Windows;
 using DesktopFences.Core.Models;
+using DesktopFences.Core.Services;
 
 namespace DesktopFences.UI.ViewModels;
 
@@ -66,13 +66,29 @@ public class FencePanelViewModel : ViewModelBase
     public FenceDefinition Model => _model;
 
     /// <summary>
-    /// Add a file to this fence. Updates both ViewModel and Model.
+    /// Whether this fence already contains the file. Windows 路径不区分大小写，
+    /// 必须用 OrdinalIgnoreCase（FSW 事件 / 全量扫描 / 拖拽给出的同一路径
+    /// 大小写可能不同，大小写敏感比较会产生重复条目）。
     /// </summary>
-    public void AddFile(string filePath)
+    public bool ContainsFile(string filePath)
+        => _model.FilePaths.Contains(filePath, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Add a file to this fence. Updates both ViewModel and Model and returns the
+    /// newly created item (or <c>null</c> if the file was already present).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately appends to the end and does NOT re-sort here: callers rely on
+    /// the new item being last (icon loading / drop animation). After a batch of
+    /// adds, call <see cref="ResortAfterChange"/> to restore the active sort.
+    /// </remarks>
+    public FileItemViewModel? AddFile(string filePath)
     {
-        if (_model.FilePaths.Contains(filePath)) return;
+        if (ContainsFile(filePath)) return null;
         _model.FilePaths.Add(filePath);
-        Files.Add(new FileItemViewModel(filePath));
+        var item = new FileItemViewModel(filePath);
+        Files.Add(item);
+        return item;
     }
 
     /// <summary>
@@ -80,8 +96,9 @@ public class FencePanelViewModel : ViewModelBase
     /// </summary>
     public void RemoveFile(string filePath)
     {
-        _model.FilePaths.Remove(filePath);
-        var item = Files.FirstOrDefault(f => f.FilePath == filePath);
+        _model.FilePaths.RemoveAll(p => string.Equals(p, filePath, StringComparison.OrdinalIgnoreCase));
+        var item = Files.FirstOrDefault(f =>
+            string.Equals(f.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
         if (item is not null) Files.Remove(item);
     }
 
@@ -238,49 +255,67 @@ public class FencePanelViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Sort files by the current SortBy/SortDirection settings.
+    /// Reorder <see cref="Files"/> in place by the current SortBy/SortDirection.
+    /// No-op in <see cref="SortField.Manual"/> mode (the user owns the order).
     /// </summary>
     public void ApplySort()
     {
+        if (_sortBy == SortField.Manual) return;
         if (Files.Count <= 1) return;
 
-        var sorted = SortBy switch
-        {
-            SortField.Name => _sortDirection == SortDirection.Ascending
-                ? Files.OrderBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase)
-                : Files.OrderByDescending(f => f.DisplayName, StringComparer.OrdinalIgnoreCase),
-            SortField.Extension => _sortDirection == SortDirection.Ascending
-                ? Files.OrderBy(f => f.Extension, StringComparer.OrdinalIgnoreCase)
-                      .ThenBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase)
-                : Files.OrderByDescending(f => f.Extension, StringComparer.OrdinalIgnoreCase)
-                      .ThenBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase),
-            SortField.Size => SortByFileInfo(f => new FileInfo(f.FilePath).Length),
-            SortField.DateModified => SortByFileInfo(f => File.GetLastWriteTime(f.FilePath).Ticks),
-            SortField.DateCreated => SortByFileInfo(f => File.GetCreationTime(f.FilePath).Ticks),
-            _ => Files.OrderBy(f => f.DisplayName, StringComparer.OrdinalIgnoreCase)
-        };
+        // For metadata-driven sorts, refresh up front so the order matches the
+        // values the Detail view shows (and reflects on-disk changes).
+        if (_sortBy is SortField.Size or SortField.DateModified or SortField.DateCreated)
+            foreach (var f in Files)
+                f.RefreshMetadata();
 
-        var list = sorted.ToList();
-        for (int i = 0; i < list.Count; i++)
+        var sorted = FileSorter.Sort(Files, _sortBy, _sortDirection, f => f.ToSortKey());
+        for (int i = 0; i < sorted.Count; i++)
         {
-            var currentIndex = Files.IndexOf(list[i]);
+            var currentIndex = Files.IndexOf(sorted[i]);
             if (currentIndex != i)
                 Files.Move(currentIndex, i);
         }
         SyncToModel();
     }
 
-    private IOrderedEnumerable<FileItemViewModel> SortByFileInfo(Func<FileItemViewModel, long> selector)
+    /// <summary>
+    /// Re-applies the active sort after files are added / removed / renamed.
+    /// In <see cref="SortField.Manual"/> mode the existing order is preserved.
+    /// </summary>
+    public void ResortAfterChange()
     {
-        return _sortDirection == SortDirection.Ascending
-            ? Files.OrderBy(f => SafeGetValue(f, selector))
-            : Files.OrderByDescending(f => SafeGetValue(f, selector));
+        if (_sortBy != SortField.Manual)
+            ApplySort();
     }
 
-    private static long SafeGetValue(FileItemViewModel f, Func<FileItemViewModel, long> selector)
+    /// <summary>
+    /// Phase 14c: move <paramref name="filePath"/> to <paramref name="insertIndex"/>
+    /// (a "drop before index" intent) within this fence and switch to
+    /// <see cref="SortField.Manual"/> so the user-defined order sticks (Explorer
+    /// semantics). The persisted order is the resulting <see cref="Files"/> /
+    /// <c>FilePaths</c> sequence. Returns true if anything actually moved or the
+    /// mode changed.
+    /// </summary>
+    public bool ReorderFile(string filePath, int insertIndex)
     {
-        try { return selector(f); }
-        catch { return 0; }
+        var item = Files.FirstOrDefault(f =>
+            string.Equals(f.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+        if (item is null) return false;
+
+        int oldIndex = Files.IndexOf(item);
+        int target = FileSorter.AdjustMoveIndex(oldIndex, insertIndex, Files.Count);
+
+        bool wasManual = _sortBy == SortField.Manual;
+        if (oldIndex == target && wasManual) return false; // nothing to do
+
+        SortBy = SortField.Manual; // setter persists to model; ApplySort early-returns for Manual
+        if (oldIndex != target)
+        {
+            Files.Move(oldIndex, target);
+            SyncToModel();
+        }
+        return true;
     }
 
     /// <summary>

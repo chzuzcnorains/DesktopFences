@@ -12,6 +12,7 @@ public class FolderPortalWatcher : IDisposable
     private readonly HashSet<string> _pendingChanges = [];
     private readonly object _lock = new();
     private string _currentPath = string.Empty;
+    private bool _disposed;
 
     /// <summary>
     /// Fired when the contents of the watched folder change.
@@ -52,6 +53,7 @@ public class FolderPortalWatcher : IDisposable
         _watcher.Deleted += OnChanged;
         _watcher.Renamed += OnChanged;
         _watcher.Changed += OnChanged;
+        _watcher.Error += OnError;
 
         // Raise initial contents
         RaiseContentsChanged();
@@ -130,22 +132,41 @@ public class FolderPortalWatcher : IDisposable
     {
         lock (_lock)
         {
+            if (_disposed) return;
             _pendingChanges.Add(e.FullPath);
+
+            // timer 操作必须在锁内：Dispose 可能正在并发销毁它，
+            // ObjectDisposedException 在 FSW 线程池线程上未处理 = 进程崩溃
+            _debounceTimer.Stop();
+            _debounceTimer.Start();
         }
-        _debounceTimer.Stop();
-        _debounceTimer.Start();
+    }
+
+    private void OnError(object sender, ErrorEventArgs e)
+    {
+        // FSW 内部缓冲区溢出后会静默丢事件，立即全量刷新自愈
+        RaiseContentsChanged();
     }
 
     private void RaiseContentsChanged()
     {
-        lock (_lock) { _pendingChanges.Clear(); }
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _pendingChanges.Clear();
+        }
         ContentsChanged?.Invoke(GetContents());
     }
 
     public void Dispose()
     {
-        _debounceTimer.Stop();
-        _debounceTimer.Dispose();
-        _watcher?.Dispose();
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _debounceTimer.Stop();
+            _debounceTimer.Dispose();
+            _watcher?.Dispose();
+        }
     }
 }

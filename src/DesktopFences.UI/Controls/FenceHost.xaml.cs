@@ -35,6 +35,10 @@ public partial class FenceHost : Window
     private bool _tabDragArmed;
     private bool _tabDragActive;
 
+    // Vertical distance (px) a tab must be dragged beyond the tab strip's top/bottom
+    // edge to be torn off into a standalone fence instead of reordered in place.
+    private const double TabDetachThreshold = 24;
+
     /// <summary>
     /// Set to true before closing this host as part of a merge operation,
     /// so the Closed handler skips page/portal cleanup for tabs that moved elsewhere.
@@ -368,6 +372,10 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
             menu.Items.Add(detachItem);
         }
 
+        // Phase 14: same 图标风格 / 呈现方式 / 排序方式 submenus as the standalone
+        // menu, targeting the active tab (FenceContent.DataContext == active VM).
+        FenceContent.AddViewSortMenuItems(menu.Items);
+
         menu.Items.Add(new Separator());
 
         // Folder Portal options (delegate to FencePanel)
@@ -466,6 +474,7 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         }
 
         var pos = e.GetPosition(TabStrip);
+        var posBorder = e.GetPosition(TabStripBorder);
         int dropIndex = ComputeTabDropIndex(pos.X);
         int from = _tabDragFromIndex;
 
@@ -481,6 +490,17 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         _tabDragArmed = false;
         _tabDragFromIndex = -1;
         e.Handled = true;
+
+        // Tear-off: dragged vertically out of the strip → detach into a standalone
+        // fence (same effect as the "分离为独立 Fence" menu item, reusing DetachTab).
+        double vOut = posBorder.Y < 0 ? -posBorder.Y : posBorder.Y - TabStripBorder.ActualHeight;
+        bool validFrom = from >= 0 && from < _tabs.Count;
+        if (validFrom && _tabs.Count > 1 && vOut > TabDetachThreshold)
+        {
+            _tabDragActive = false;
+            TabDetachRequested?.Invoke(_tabs[from]);
+            return;
+        }
 
         if (noop)
         {

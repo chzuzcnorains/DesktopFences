@@ -12,14 +12,26 @@ public static class ShellFileOperations
 {
     /// <summary>
     /// Open a file using the default shell handler (ShellExecute).
+    /// Returns false on failure (file deleted, no association, UAC cancelled…) —
+    /// Process.Start throws Win32Exception in those cases and callers sit on the
+    /// UI thread, so an unhandled throw would crash the whole app.
     /// </summary>
-    public static void OpenFile(string filePath)
+    public static bool OpenFile(string filePath)
     {
-        Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = filePath,
-            UseShellExecute = true
-        });
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenFile failed for '{filePath}': {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>

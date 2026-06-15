@@ -78,6 +78,15 @@ Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是�
 - `OnDebouncedForegroundRecovery` 仍然在桌面前台时 `return`：被 200ms 防抖保护，桌面前台已由 `OnForegroundChanged` 即时处理
 - 所有守护（`_isTopmost` / `_isPeekActive` / `_isDragging` / `_pendingTopmost`）全部保留：避免冲突
 
+### 类名无关的两条判据（bug 35）
+
+`GetForegroundWindow()` 返回窗口的**类名不是可靠信号**——最小化窗口、托盘菜单关闭过渡态、任务栏闪烁缩略图宿主等都会骗过 `IsDesktopOrTaskbarWindow`。继续往类名表里加窗口类只是打补丁、跨 Win11 版本易碎。改用两条与类名/系统版本无关的判据：
+
+- **最小化前台不下沉（预防）**：`OnDebouncedForegroundRecovery` / `SendToBottom` 在判定前先查 `NativeMethods.IsIconic(foreground)`，为 true 则跳过 `HWND_BOTTOM`。最小化窗口不遮挡任何东西，把 fence 沉到它"之下"必然沉到壁纸下。典型场景：任务栏闪烁图标多是最小化应用在请求关注，鼠标移过去释放前台锁后它抢到前台但仍最小化。
+  - ⚠️ **`IsIconic` 判断必须延迟到 200ms 防抖之后，不能在 `OnForegroundChanged` 即时执行**：窗口在还原动画初期（Win+D 第二次恢复 / 点任务栏还原最小化窗口）仍短暂 `IsIconic`，即时 `return` 会让 fence 永不下沉、卡在恢复窗口前面（bug 35 回归）。延迟到防抖后，正在还原的窗口已退出 iconic（应下沉），单纯闪烁、保持最小化的窗口仍 iconic（不下沉），两者自然区分。
+- **WindowFromPoint 实测遮挡（自愈兜底）**：`IsAnyFenceSunkBehindDesktop()` 对每个可见 fence 取矩形中心点，`WindowFromPoint` 命中桌面类窗口即判定该 fence 已被压到壁纸下，整组 `HoistAllAboveDesktop` 拉回。命中普通 app 窗口（被合法遮挡）则不动（保护 bug 14）。接入点：5 秒恢复定时器开头 + `OnDebouncedForegroundRecovery` 末尾的 50ms 一次性快速复检（`ScheduleSunkRecheck`）。
+  - **overlay 不参与探测**：`DesktopIconOverlay` 是 `AllowsTransparency` 层叠窗口、空白处 alpha=0 会被 OS click-through 透传、`WindowFromPoint` 误返回桌面（bug 19）。`RegisterWindow(hwnd, isOverlay: true)` 标记后探测时跳过；它与 fence 一起下沉，靠 fence 触发整组 hoist 一并带回。
+
 ### 窗口样式
 
 - `WS_EX_TOOLWINDOW` — 从任务栏和 Alt+Tab 隐藏

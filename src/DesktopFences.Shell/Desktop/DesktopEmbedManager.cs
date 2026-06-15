@@ -20,6 +20,7 @@ namespace DesktopFences.Shell.Desktop;
 public sealed class DesktopEmbedManager : IDisposable
 {
     private readonly List<IntPtr> _managedWindows = [];
+    private IntPtr _overlayWindow;  // DesktopIconOverlay hwnd — excluded from occlusion probing (see RegisterWindow)
     private readonly LowLevelKeyboardHook _keyboardHook = new();
     private IntPtr _winEventHookId;
     private NativeMethods.WinEventDelegate? _winEventProc;
@@ -70,6 +71,15 @@ public sealed class DesktopEmbedManager : IDisposable
                 if (_isTopmost || _isPeekActive || _isDragging || _pendingTopmost) return;
                 if (_managedWindows.Count == 0) return;
 
+                // 类名无关的自愈：实测有 fence 已被压到壁纸下方 → 整组拉回（含 overlay）。
+                // 兜住"前台窗口类名未被识别为桌面/任务栏"的所有过渡态（如最小化窗口抢前台、
+                // 任务栏闪烁缩略图宿主等），不依赖猜测具体窗口类名。
+                if (IsAnyFenceSunkBehindDesktop())
+                {
+                    HoistAllAboveDesktop();
+                    return;
+                }
+
                 var foreground = NativeMethods.GetForegroundWindow();
                 if (WindowClassUtil.IsDesktopWindow(foreground))
                 {
@@ -100,13 +110,25 @@ public sealed class DesktopEmbedManager : IDisposable
     /// Register a window to be managed. Call after WPF window Loaded event.
     /// Applies WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE and ensures it's visible above desktop.
     /// </summary>
-    public void RegisterWindow(IntPtr hwnd)
+    public void RegisterWindow(IntPtr hwnd) => RegisterWindow(hwnd, isOverlay: false);
+
+    /// <summary>
+    /// Register a window to be managed.
+    /// <paramref name="isOverlay"/> marks the DesktopIconOverlay window so the
+    /// WindowFromPoint occlusion self-heal (<see cref="IsAnyFenceSunkBehindDesktop"/>)
+    /// skips probing it: the overlay is an AllowsTransparency layered window whose
+    /// empty areas are alpha=0 / click-through (bug 19), so probing its center would
+    /// pass through and falsely report it as sunk. It sinks together with the fences,
+    /// so a fence-triggered hoist brings it back along.
+    /// </summary>
+    public void RegisterWindow(IntPtr hwnd, bool isOverlay)
     {
         var exStyle = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
         var newStyle = (long)exStyle | NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;
         NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, new IntPtr(newStyle));
 
         _managedWindows.Add(hwnd);
+        if (isOverlay) _overlayWindow = hwnd;
 
         // Windows 11 上当前台是桌面/任务栏时，HWND_TOP 也会被 DWM 推到壁纸下；
         // 复用 BringNewWindowToFront 的分支策略：桌面前台用 HWND_TOPMOST，
@@ -118,6 +140,7 @@ public sealed class DesktopEmbedManager : IDisposable
     public void UnregisterWindow(IntPtr hwnd)
     {
         _managedWindows.Remove(hwnd);
+        if (_overlayWindow == hwnd) _overlayWindow = IntPtr.Zero;
     }
 
     /// <summary>
@@ -263,6 +286,13 @@ public sealed class DesktopEmbedManager : IDisposable
         if (foregroundProcessId == currentProcessId)
             return;
 
+        // 注意：这里**不能**即时判断 IsIconic(hwnd) 就 return。窗口在还原动画初期
+        // （Win+D 第二次恢复 / 点任务栏还原最小化窗口）仍短暂处于 iconic 状态，即时
+        // 跳过会让 fence 永远不下沉、卡在恢复窗口前面。"是否最小化"的判断推迟到 200ms
+        // 防抖之后（OnDebouncedForegroundRecovery / SendToBottom 里的 IsIconic 守卫）——
+        // 届时正在还原的窗口已退出 iconic，而单纯闪烁、一直最小化的窗口仍是 iconic，
+        // 既修复任务栏闪烁图标消失、又不破坏窗口还原（bug 35）。
+
         if (_isTopmost)
         {
             // If the new foreground is a desktop window (Progman/WorkerW), DON'T dismiss —
@@ -326,13 +356,44 @@ public sealed class DesktopEmbedManager : IDisposable
 
         if (_isTopmost || _isPeekActive || _pendingTopmost || _isDragging) return;
 
-        // Skip recovery when desktop is foreground — calling HWND_BOTTOM
-        // in this state can push windows behind the desktop on Windows 11.
-        if (WindowClassUtil.IsDesktopOrTaskbarWindow(NativeMethods.GetForegroundWindow()))
+        // Skip recovery when desktop / taskbar / a minimized window is foreground —
+        // calling HWND_BOTTOM in any of these states can push windows behind the
+        // desktop on Windows 11 (the desktop is still the visible top layer).
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground) || NativeMethods.IsIconic(foreground))
             return;
 
         foreach (var w in _managedWindows)
             SendToBottom(w);
+
+        // 兜底快速复检：万一上面的 SendToBottom 仍在"前台过渡态"下把窗口压到壁纸下
+        // （类名/最小化判断都漏判的罕见情况），50ms 后实测遮挡并拉回，把不可见
+        // 窗口的存在时间从最长 5 秒（恢复定时器）缩短到几十毫秒。
+        ScheduleSunkRecheck();
+    }
+
+    private DispatcherTimer? _sunkRecheckTimer;
+
+    private void ScheduleSunkRecheck()
+    {
+        if (_sunkRecheckTimer is null)
+        {
+            _sunkRecheckTimer = new DispatcherTimer(DispatcherPriority.Normal,
+                _dispatcher ?? Dispatcher.CurrentDispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            _sunkRecheckTimer.Tick += (_, _) =>
+            {
+                _sunkRecheckTimer?.Stop();
+                if (_isTopmost || _isPeekActive || _pendingTopmost || _isDragging) return;
+                if (IsAnyFenceSunkBehindDesktop())
+                    HoistAllAboveDesktop();
+            };
+        }
+
+        _sunkRecheckTimer.Stop();
+        _sunkRecheckTimer.Start();
     }
 
     /// <summary>
@@ -401,6 +462,39 @@ public sealed class DesktopEmbedManager : IDisposable
             if (!NativeMethods.IsWindowVisible(hwnd)) continue;
             HoistSingleAboveDesktop(hwnd);
         }
+    }
+
+    /// <summary>
+    /// 类名无关地实测"是否有 fence 已被 DWM 压到壁纸下方"。对每个可见 fence 取其矩形
+    /// 中心点（fence 内容边框中心不透明，可靠命中），用 WindowFromPoint 看那个位置实际
+    /// 是谁在画：
+    ///   - 命中自己 → 在顶层，正常；
+    ///   - 命中桌面类窗口 (Progman/WorkerW/SHELLDLL_DefView/SysListView32) → 桌面画在了
+    ///     fence 本该出现的位置，说明 fence 已沉到壁纸下 → true；
+    ///   - 命中其它普通 app 窗口 → fence 被合法遮挡（用户开了别的窗口），不算沉，跳过
+    ///     （保护 bug 14：别的程序最大化时不要把 fence 抢到 topmost）。
+    /// 不探测 overlay（_overlayWindow）：它是 AllowsTransparency 层叠窗口、空白处 alpha=0
+    /// 会 click-through 透传误返回桌面（bug 19）。overlay 与 fence 一起下沉，靠 fence 触发
+    /// 整组 hoist 一并带回。
+    /// 多显示器：GetWindowRect / WindowFromPoint 均用虚拟屏坐标，副屏 fence 天然有效。
+    /// </summary>
+    private bool IsAnyFenceSunkBehindDesktop()
+    {
+        foreach (var hwnd in _managedWindows)
+        {
+            if (hwnd == _overlayWindow) continue;
+            if (!NativeMethods.IsWindowVisible(hwnd)) continue;
+            if (!NativeMethods.GetWindowRect(hwnd, out var r)) continue;
+
+            int w = r.Right - r.Left, h = r.Bottom - r.Top;
+            if (w <= 0 || h <= 0) continue;
+
+            var pt = new NativeMethods.POINT { X = r.Left + w / 2, Y = r.Top + h / 2 };
+            var hit = NativeMethods.WindowFromPoint(pt);
+            if (hit == hwnd) continue;
+            if (WindowClassUtil.IsDesktopWindow(hit)) return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -473,10 +567,11 @@ public sealed class DesktopEmbedManager : IDisposable
         // window triggers a z-order recovery.
 
         var foreground = NativeMethods.GetForegroundWindow();
-        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground) || NativeMethods.IsIconic(foreground))
         {
-            // When desktop is foreground, don't change z-order at all!
-            // Just ensure we're visible, but don't touch z-order.
+            // When the desktop/taskbar — or a minimized window that grabbed foreground
+            // without actually covering anything — is foreground, don't change z-order at
+            // all! HWND_BOTTOM here can push the window behind the wallpaper on Win11.
             return;
         }
 
@@ -500,6 +595,7 @@ public sealed class DesktopEmbedManager : IDisposable
         _zOrderRecoveryTimer?.Stop();
         _zOrderRecoveryTimer?.Dispose();
         _foregroundDebounceTimer?.Stop();
+        _sunkRecheckTimer?.Stop();
 
         _keyboardHook.Dispose();
 

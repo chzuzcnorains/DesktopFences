@@ -28,10 +28,20 @@ internal static class JsonFileStore
     public static async Task WriteAtomicAsync<T>(string path, T value, JsonSerializerOptions options)
     {
         var tempPath = path + ".tmp";
-        await using (var stream = File.Create(tempPath))
+        try
         {
-            await JsonSerializer.SerializeAsync(stream, value, options);
+            await using (var stream = File.Create(tempPath))
+            {
+                await JsonSerializer.SerializeAsync(stream, value, options);
+            }
+            File.Move(tempPath, path, overwrite: true);
         }
-        File.Move(tempPath, path, overwrite: true);
+        catch
+        {
+            // Serialization/IO failed mid-write — remove the orphaned temp file
+            // so it doesn't accumulate, then surface the original error.
+            try { File.Delete(tempPath); } catch { /* best effort */ }
+            throw;
+        }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Media;
+using DesktopFences.Core.Services;
 
 namespace DesktopFences.UI.ViewModels;
 
@@ -79,6 +80,14 @@ public class FileItemViewModel : ViewModelBase
     private bool _isSelected;
     private bool _isRenaming;
 
+    // Phase 14: lazily-loaded file metadata for the Detail view / sorting.
+    // Loaded on first access (single FileInfo read) and invalidated by
+    // RefreshMetadata() when the file is renamed / changed on disk.
+    private bool _metaLoaded;
+    private long _sizeBytes;       // -1 for folders or IO failure
+    private DateTime _dateModified;
+    private DateTime _dateCreated;
+
     public FileItemViewModel(string filePath)
     {
         _filePath = filePath;
@@ -107,6 +116,7 @@ public class FileItemViewModel : ViewModelBase
                 OnPropertyChanged(nameof(KindLabel));
                 OnPropertyChanged(nameof(SystemBadgeText));
                 OnPropertyChanged(nameof(IsDirectory));
+                RefreshMetadata(); // path changed (rename) → invalidate size/date cache
             }
         }
     }
@@ -137,6 +147,102 @@ public class FileItemViewModel : ViewModelBase
 
     public string Extension => Path.GetExtension(_filePath);
     public bool IsDirectory => Directory.Exists(_filePath);
+
+    // ── Phase 14: file metadata (Detail view columns + sorting) ──────
+
+    /// <summary>File length in bytes; <c>-1</c> for folders or on IO failure.</summary>
+    public long SizeBytes { get { EnsureMeta(); return _sizeBytes; } }
+
+    /// <summary>Last-write time; <c>default</c> on IO failure.</summary>
+    public DateTime DateModified { get { EnsureMeta(); return _dateModified; } }
+
+    /// <summary>Creation time; <c>default</c> on IO failure.</summary>
+    public DateTime DateCreated { get { EnsureMeta(); return _dateCreated; } }
+
+    /// <summary>Human-readable size for the Detail column (empty for folders).</summary>
+    public string SizeDisplay
+    {
+        get
+        {
+            var bytes = SizeBytes;
+            return bytes < 0 ? string.Empty : FormatSize(bytes);
+        }
+    }
+
+    /// <summary>Formatted last-write time for the Detail column.</summary>
+    public string DateModifiedDisplay
+    {
+        get
+        {
+            var dt = DateModified;
+            return dt == default ? string.Empty : dt.ToString("yyyy/MM/dd HH:mm");
+        }
+    }
+
+    /// <summary>
+    /// Pure sort key consumed by <see cref="DesktopFences.Core.Services.FileSorter"/>.
+    /// Built from the lazily-loaded metadata so the Core sorter never touches disk.
+    /// </summary>
+    public FileSortKey ToSortKey()
+        => new(DisplayName, Extension, SizeBytes, DateModified.Ticks, DateCreated.Ticks);
+
+    /// <summary>
+    /// Reads size + timestamps from disk on first access. All IO is guarded:
+    /// folders / missing files / permission failures fall back to -1 / default
+    /// so sorting and the Detail view stay deterministic.
+    /// </summary>
+    private void EnsureMeta()
+    {
+        if (_metaLoaded) return;
+        _metaLoaded = true;
+        try
+        {
+            if (IsDirectory)
+            {
+                _sizeBytes = -1;
+                _dateModified = Directory.GetLastWriteTime(_filePath);
+                _dateCreated = Directory.GetCreationTime(_filePath);
+            }
+            else
+            {
+                var fi = new FileInfo(_filePath);
+                _sizeBytes = fi.Exists ? fi.Length : -1;
+                _dateModified = fi.LastWriteTime;
+                _dateCreated = fi.CreationTime;
+            }
+        }
+        catch
+        {
+            _sizeBytes = -1;
+            _dateModified = default;
+            _dateCreated = default;
+        }
+    }
+
+    /// <summary>
+    /// Invalidates the cached metadata and re-raises change notifications so the
+    /// Detail view re-reads size / date. Called on rename (FilePath setter) and
+    /// when a portal refresh signals the file changed on disk.
+    /// </summary>
+    public void RefreshMetadata()
+    {
+        _metaLoaded = false;
+        OnPropertyChanged(nameof(SizeBytes));
+        OnPropertyChanged(nameof(DateModified));
+        OnPropertyChanged(nameof(DateCreated));
+        OnPropertyChanged(nameof(SizeDisplay));
+        OnPropertyChanged(nameof(DateModifiedDisplay));
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        string[] units = ["KB", "MB", "GB", "TB"];
+        double value = bytes;
+        int unit = -1;
+        do { value /= 1024; unit++; } while (value >= 1024 && unit < units.Length - 1);
+        return $"{value:0.#} {units[unit]}";
+    }
 
     /// <summary>
     /// Short overlay label rendered on top of the colored file-type tile

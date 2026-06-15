@@ -62,7 +62,14 @@ public enum SortField
     Extension,
     Size,
     DateModified,
-    DateCreated
+    DateCreated,
+
+    /// <summary>
+    /// Phase 14: user-defined manual order. Files keep the order they were
+    /// dragged into; <see cref="FilePaths"/> order is the persisted source of
+    /// truth. Automatic re-sorting is skipped while this is active.
+    /// </summary>
+    Manual
 }
 
 public enum SortDirection

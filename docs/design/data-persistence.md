@@ -28,6 +28,25 @@
 原子写入语义集中实现。新增任何 JSON 持久化文件请直接调用这两个助手，不要重复写
 "`OpenRead/DeserializeAsync` 或 `Create/SerializeAsync + File.Move`" 模板。
 
+## 2.1 健壮性保障（bug 25 引入，2026-06-12）
+
+- **损坏文件回退 + 备份**：`JsonLayoutStore` 所有 Load 走内部 `ReadResilientAsync<T>`——
+  捕获 `JsonException/IOException/UnauthorizedAccessException`，把损坏文件复制为
+  `{name}.corrupt-{yyyyMMddHHmmss}` 后返回默认值，失败记录在 `JsonLayoutStore.LoadFailures`。
+  App 启动完成后 `NotifyLoadFailures()` 弹窗告知备份位置。**用户数据永远不被静默销毁。**
+- **写串行化**：`JsonLayoutStore` 内部 `SemaphoreSlim(1,1)`（`WriteLockedAsync`）串行化所有写入，
+  消除 auto-save 定时器（线程池线程）与直接保存（UI 线程）并发写同一 `.tmp` 的 IOException。
+- **写失败清理**：`WriteAtomicAsync` 序列化/IO 异常时删除残留 `.tmp` 再 rethrow，目标文件保持旧内容。
+- **加载失败禁写**：`App_OnStartup` `await LoadFencesAsync()` + try-catch；未知异常设 `_loadFailed`，
+  `SaveFencesAsync/SavePagesAsync/SaveRulesAsync` 拒绝写盘、auto-save 不启动——内存状态不完整时
+  绝不覆盖磁盘数据。
+- **退出保存时序**：托盘退出 `await SaveFencesAsync()` 完成后才 `Shutdown()`；`SessionEnding`
+  （注销/关机）同步完成最终保存。**禁止在 `OnExit` 做兜底保存**——此时窗口已全部 Closed、
+  `_fenceWindows` 已被清空，会写出空列表；`RequestAutoSave` 在 `_isShuttingDown` 期间直接拒绝，
+  防止关闭波次最后的空列表延迟保存。
+- **全局异常兜底**：`DispatcherUnhandledException` 记录日志 + Toast + `e.Handled = true`
+  （崩溃会让隐藏中的桌面图标层无法恢复，代价大于单次操作失败）。
+
 ## 3. 数据模型
 
 ### FenceDefinition

@@ -38,6 +38,7 @@ public partial class App : Application
     private System.Timers.Timer? _autoOrganizeTimer;
     private System.Timers.Timer? _fileExistenceTimer;
     private bool _isShuttingDown;
+    private bool _loadFailed; // 启动加载异常 → 禁止保存，防止用空状态覆盖磁盘上的好数据
     private UI.Controls.SnapGuideOverlay? _snapGuideOverlay;
     private DesktopIconManager? _desktopIconManager;
     private DesktopIconOverlay? _desktopOverlay;
@@ -45,8 +46,15 @@ public partial class App : Application
     private readonly string _desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
     private readonly string _publicDesktopPath = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
 
-    private void App_OnStartup(object sender, StartupEventArgs e)
+    private async void App_OnStartup(object sender, StartupEventArgs e)
     {
+        // 全局兜底：UI 线程未处理异常不再直接崩进程——运行期间桌面图标层
+        // (SysListView32) 处于隐藏状态，进程意外退出会让用户桌面图标"消失"。
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        // Windows 注销/关机时窗口尚未销毁，在此同步完成最终保存
+        // （OnExit 阶段窗口已全部 Closed、_fenceWindows 已被清空，无法补救）。
+        SessionEnding += OnSessionEnding;
+
         _singleInstanceMutex = new Mutex(true, "DesktopFences_SingleInstance", out bool isNew);
         if (!isNew)
         {
@@ -103,8 +111,81 @@ public partial class App : Application
         _snapGuideOverlay = new UI.Controls.SnapGuideOverlay();
         _snapGuideOverlay.Show();
 
-        _ = LoadFencesAsync();
-        StartAutoSave();
+        try
+        {
+            await LoadFencesAsync();
+        }
+        catch (Exception ex)
+        {
+            // 加载中途异常 → 内存状态不完整，禁止一切保存覆盖磁盘数据。命中此处的两类：
+            //   1) 数据文件瞬时 IO/权限错误（文件被杀软/备份工具独占锁定）——
+            //      ReadResilientAsync 故意上抛而非回退默认，避免好数据被空状态覆盖；
+            //   2) 其它未知异常。
+            // （内容损坏的 JSON 不走这里：JsonLayoutStore 已备份后回退默认值。）
+            _loadFailed = true;
+            System.Diagnostics.Debug.WriteLine($"LoadFencesAsync failed: {ex}");
+            MessageBox.Show(
+                $"启动加载失败，已禁用自动保存以保护现有数据。\n\n{ex.Message}",
+                "DesktopFences", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        NotifyLoadFailures();
+
+        if (!_loadFailed)
+            StartAutoSave();
+    }
+
+    /// <summary>
+    /// 数据文件损坏时（JsonLayoutStore 已备份原文件并回退默认值）提示用户，
+    /// 避免"fence 全部消失"却无任何线索。
+    /// </summary>
+    private void NotifyLoadFailures()
+    {
+        if (_layoutStore is null || _layoutStore.LoadFailures.Count == 0) return;
+
+        var lines = _layoutStore.LoadFailures.Select(f =>
+            $"• {Path.GetFileName(f.FilePath)} → " +
+            (f.BackupPath is null ? "（备份失败）" : $"已备份为 {Path.GetFileName(f.BackupPath)}"));
+        MessageBox.Show(
+            "以下数据文件已损坏，无法读取，本次启动使用默认配置：\n\n" +
+            string.Join("\n", lines) +
+            "\n\n损坏的原文件已备份在同目录，可手动修复后替换回原文件名并重启。",
+            "DesktopFences — 数据文件损坏", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private void OnDispatcherUnhandledException(object sender,
+        System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"Unhandled dispatcher exception: {e.Exception}");
+        // 吞掉并提示而不是崩溃：崩溃会让隐藏中的桌面图标层无法恢复（需等下次启动
+        // 的 crash recovery），代价远大于单次操作失败。
+        e.Handled = true;
+        ShowToast($"操作失败：{e.Exception.Message}");
+    }
+
+    private void OnSessionEnding(object sender, SessionEndingCancelEventArgs e)
+    {
+        // 注销/关机：窗口仍然存活，同步刷出最终布局。
+        // Task.Run 避免 await 续体回投 dispatcher 与 GetResult() 阻塞互相死锁。
+        _isShuttingDown = true;
+        try
+        {
+            if (_layoutStore is not null && !_loadFailed)
+            {
+                var definitions = _fenceWindows.AllDefinitions();
+                var hash = _monitorManager?.CurrentConfigHash;
+                Task.Run(async () =>
+                {
+                    await _layoutStore.SaveFencesAsync(definitions);
+                    if (hash is not null)
+                        await _layoutStore.SaveMonitorLayoutAsync(hash, definitions);
+                }).GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SessionEnding save failed: {ex}");
+        }
     }
 
     // ── Auto-Organize Timer ────────────────────────────────────
@@ -129,6 +210,7 @@ public partial class App : Application
 
             await Dispatcher.InvokeAsync(() =>
             {
+                var affected = new HashSet<FencePanelViewModel>();
                 foreach (var filePath in allFiles)
                 {
                     if (IsFileAlreadyInAnyFence(filePath))
@@ -148,13 +230,20 @@ public partial class App : Application
                     }
 
                     // 添加文件
-                    targetTab.AddFile(filePath);
+                    var added = targetTab.AddFile(filePath);
                     _desktopOverlay?.RemoveIcon(filePath);
 
-                    var lastFile = targetTab.Files.LastOrDefault();
-                    if (lastFile != null && _iconExtractor != null)
-                        lastFile.Icon = _iconExtractor.GetIcon(filePath);
+                    if (added != null)
+                    {
+                        if (_iconExtractor != null)
+                            added.Icon = _iconExtractor.GetIcon(filePath);
+                        affected.Add(targetTab);
+                    }
                 }
+
+                // Restore each touched fence's active sort after the batch.
+                foreach (var tab in affected)
+                    tab.ResortAfterChange();
             });
         }
         catch (Exception ex)
@@ -291,10 +380,12 @@ public partial class App : Application
         menu.Items.Add("设置...", null, (_, _) => Dispatcher.Invoke(() => ShowSettings(0)));
         menu.Items.Add("保存布局", null, async (_, _) => await SaveFencesAsync());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(() =>
+        menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(async () =>
         {
             _isShuttingDown = true; // skip RecentClosed recording during the shutdown wave
-            _ = SaveFencesAsync();
+            // await 完成最终保存后再 Shutdown——fire-and-forget 会与 dispatcher
+            // 关闭竞态，最后一次布局变更可能永远写不出去。
+            await SaveFencesAsync();
             Shutdown();
         }));
 
@@ -919,7 +1010,8 @@ public partial class App : Application
             targetHost.Show();
 
         targetHost.Activate();
-        ShellFileOperations.OpenFile(filePath);
+        if (!ShellFileOperations.OpenFile(filePath))
+            ShowToast($"无法打开：{Path.GetFileName(filePath)}");
     }
 
     // ── Snapshots ─────────────────────────────────────────────
@@ -1438,17 +1530,30 @@ public partial class App : Application
         foreach (var path in toRemove)
             vm.RemoveFile(path);
 
+        bool changed = toRemove.Count > 0;
         foreach (var path in contents)
         {
-            if (!vm.Files.Any(f =>
-                string.Equals(f.FilePath, path, StringComparison.OrdinalIgnoreCase)))
+            var existing = vm.Files.FirstOrDefault(f =>
+                string.Equals(f.FilePath, path, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
             {
-                vm.AddFile(path);
-                var lastFile = vm.Files.LastOrDefault();
-                if (lastFile is not null && lastFile.Icon is null && _iconExtractor is not null)
-                    lastFile.Icon = _iconExtractor.GetIcon(path);
+                var added = vm.AddFile(path);
+                if (added is not null)
+                {
+                    if (added.Icon is null && _iconExtractor is not null)
+                        added.Icon = _iconExtractor.GetIcon(path);
+                    changed = true;
+                }
+            }
+            else
+            {
+                // Portal file may have changed on disk (size/date) — refresh so
+                // the Detail view and metadata sorts stay current.
+                existing.RefreshMetadata();
             }
         }
+
+        if (changed) vm.ResortAfterChange();
     }
 
     // ── Peek ─────────────────────────────────────────────────
@@ -1490,6 +1595,7 @@ public partial class App : Application
     {
         Dispatcher.InvokeAsync(() =>
         {
+            var affected = new HashSet<FencePanelViewModel>();
             foreach (var filePath in newFiles)
             {
                 if (IsFileAlreadyInAnyFence(filePath))
@@ -1512,18 +1618,22 @@ public partial class App : Application
                 }
 
                 // 添加文件
-                targetTab.AddFile(filePath);
+                var added = targetTab.AddFile(filePath);
                 _desktopOverlay?.RemoveIcon(filePath);
 
-                if (_iconExtractor != null)
+                if (added != null)
                 {
-                    var lastFile = targetTab.Files.LastOrDefault();
-                    if (lastFile != null && lastFile.Icon == null)
-                        lastFile.Icon = _iconExtractor.GetIcon(filePath);
+                    if (_iconExtractor != null && added.Icon == null)
+                        added.Icon = _iconExtractor.GetIcon(filePath);
+                    affected.Add(targetTab);
                 }
 
                 RequestAutoSave();
             }
+
+            // Restore each touched fence's active sort after the batch.
+            foreach (var tab in affected)
+                tab.ResortAfterChange();
         });
     }
 
@@ -1551,6 +1661,8 @@ public partial class App : Application
 
                 fileItem.FilePath = newPath;
                 tab.SyncToModel();
+                // Name/extension order may change after a rename → re-sort.
+                tab.ResortAfterChange();
                 RequestAutoSave();
                 break;
             }
@@ -1740,6 +1852,9 @@ public partial class App : Application
 
     private async Task SaveFencesAsync()
     {
+        // 加载失败状态下绝不写盘，防止用空/残缺状态覆盖磁盘上的好数据。
+        if (_loadFailed) return;
+
         try
         {
             var definitions = Dispatcher.CheckAccess()
@@ -1751,23 +1866,34 @@ public partial class App : Application
             if (_monitorManager is not null)
                 await _layoutStore.SaveMonitorLayoutAsync(_monitorManager.CurrentConfigHash, definitions);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SaveFencesAsync failed: {ex}");
+        }
     }
 
     private async Task SavePagesAsync()
     {
+        if (_loadFailed) return;
         try
         {
             if (_pageManager is not null)
                 await _layoutStore!.SavePagesAsync(_pageManager.Pages);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SavePagesAsync failed: {ex}");
+        }
     }
 
     private async Task SaveRulesAsync()
     {
+        if (_loadFailed) return;
         try { await _layoutStore!.SaveRulesAsync(_rules); }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"SaveRulesAsync failed: {ex}");
+        }
     }
 
     private void StartAutoSave()
@@ -1778,6 +1904,9 @@ public partial class App : Application
 
     private void RequestAutoSave()
     {
+        // 关闭波次中窗口逐个 Closed → Remove → RequestAutoSave，若最后一个
+        // 空列表的延迟保存在退出前触发会清掉整份布局，这里直接拒绝。
+        if (_isShuttingDown) return;
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Start();
     }

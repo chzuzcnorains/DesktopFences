@@ -66,6 +66,7 @@ public sealed class DesktopFileMonitor : IDisposable
         _watcher.Created += (_, e) => OnFileEvent(e.FullPath, FileChangeType.Created);
         _watcher.Deleted += (_, e) => OnFileEvent(e.FullPath, FileChangeType.Deleted);
         _watcher.Renamed += OnRenamed;
+        _watcher.Error += OnWatcherError;
 
         // Also watch the Public Desktop directory
         if (!string.IsNullOrEmpty(_publicDesktopPath) &&
@@ -82,6 +83,7 @@ public sealed class DesktopFileMonitor : IDisposable
             _publicWatcher.Created += (_, e) => OnFileEvent(e.FullPath, FileChangeType.Created);
             _publicWatcher.Deleted += (_, e) => OnFileEvent(e.FullPath, FileChangeType.Deleted);
             _publicWatcher.Renamed += OnRenamed;
+            _publicWatcher.Error += OnWatcherError;
         }
 
         // Debounce timer — fires 500ms after last change
@@ -99,16 +101,21 @@ public sealed class DesktopFileMonitor : IDisposable
     /// </summary>
     public void Stop()
     {
-        _watcher?.Dispose();
-        _watcher = null;
-        _publicWatcher?.Dispose();
-        _publicWatcher = null;
-        _scanTimer?.Stop();
-        _scanTimer?.Dispose();
-        _scanTimer = null;
-        _debounceTimer?.Stop();
-        _debounceTimer?.Dispose();
-        _debounceTimer = null;
+        // 与 OnFileEvent（FSW 线程池线程）同锁：否则 Dispose 与 timer.Stop/Start
+        // 竞态会在线程池线程抛 ObjectDisposedException，未处理 = 进程崩溃。
+        lock (_lock)
+        {
+            _watcher?.Dispose();
+            _watcher = null;
+            _publicWatcher?.Dispose();
+            _publicWatcher = null;
+            _scanTimer?.Stop();
+            _scanTimer?.Dispose();
+            _scanTimer = null;
+            _debounceTimer?.Stop();
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+        }
     }
 
     /// <summary>
@@ -136,12 +143,13 @@ public sealed class DesktopFileMonitor : IDisposable
     {
         lock (_lock)
         {
+            if (_disposed) return;
             _pendingChanges.Add(fullPath);
-        }
 
-        // Reset debounce timer
-        _debounceTimer?.Stop();
-        _debounceTimer?.Start();
+            // Reset debounce timer — 必须在锁内：Stop() 可能正在并发 Dispose 它
+            _debounceTimer?.Stop();
+            _debounceTimer?.Start();
+        }
     }
 
     private void OnDebounceElapsed(object? sender, ElapsedEventArgs e)
@@ -149,8 +157,17 @@ public sealed class DesktopFileMonitor : IDisposable
         PerformFullScan();
     }
 
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        // FSW 内部缓冲区溢出后会静默丢事件（如桌面瞬间批量增删文件），
+        // 立即全量扫描自愈，而不是等 30 秒兜底扫描。
+        PerformFullScan();
+    }
+
     private void PerformFullScan()
     {
+        if (_disposed) return;
+
         var currentFiles = ScanDesktop();
 
         List<string> added;
