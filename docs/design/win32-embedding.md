@@ -47,9 +47,11 @@
 ```
 BOTTOM ──(Win+D 检测)──→ 延迟 300ms ──→ TOPMOST
 TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTOM
+TOPMOST ──(任意 SetAllBottom：Win+D restore / ExitPeek / 前台切到真实窗口，即时 SendToBottom 可能因桌面/iconic 前台 no-op)──→ 延迟 200ms 防抖重沉 ──→ BOTTOM
 （用户主动新建 Fence 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
 （RegisterWindow / EnsureVisibleAboveDesktop 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
-（前台变成桌面/任务栏时 OnForegroundChanged / 5 秒定时器）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
+（前台变成桌面 / 5 秒定时器，且 IsAnyFenceSunkBehindDesktop 实测 fence 真被压到壁纸下）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
+  注：未沉时即使桌面前台也**不**hoist（bug 38：否则点桌面会把 fence 抬到普通窗口之上）
 ```
 
 ### "让窗口可见"的统一策略
@@ -65,8 +67,9 @@ Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是�
 1. **RegisterWindow**：所有新窗口（包括 `DesktopIconOverlay` 与 fence）启动时注册，确保立即可见
 2. **BringNewWindowToFront**（新建路径，统一 topmost）：用户主动新建 Fence（托盘菜单"新建 Fence" / 规则触发创建 / 恢复最近关闭 / 重置布局 / 导入布局 / 恢复快照）
 3. **EnsureVisibleAboveDesktop**（常规路径，按 foreground 分支）：启动加载的 fence、`ToggleAllFences` 等
-4. **OnForegroundChanged（前台变成桌面/任务栏分支）**：截图工具关闭后前台立刻回到 Progman 这类场景，即时拉回
-5. **5 秒 z-order 恢复定时器（桌面前台分支）**：兜底机制，覆盖边界情况
+4. **OnForegroundChanged（前台变成桌面分支）**：截图工具关闭后前台立刻回到 Progman 这类场景，**仅当 `IsAnyFenceSunkBehindDesktop()` 实测真沉时才即时拉回**，否则不动 + 50ms `ScheduleSunkRecheck` 复检（bug 38：避免点击桌面把没沉的 fence 抬到普通窗口之上）
+5. **5 秒 z-order 恢复定时器**：兜底机制——开头 `IsAnyFenceSunkBehindDesktop()` 实测真沉则整组 hoist；否则桌面/任务栏前台一律不动，普通前台才 `SendToBottom`（bug 38：删除了原桌面分支的无条件 hoist）
+6. **EnsureOverlayVisible**（overlay 启动专属，统一 topmost）：`DesktopIconOverlay.OnLoaded` 两拍（100/500ms）自愈，解决"fence 正常、overlay 单独被压/未绘制"——overlay 被 `WindowFromPoint` 自愈排除（bug 19），不能只依赖随 fence 带回（bug 36）
 
 ### _isTopmost 状态不变量
 
@@ -84,8 +87,10 @@ Windows 11 上当桌面（Progman/WorkerW）或任务栏（Shell_TrayWnd）是�
 
 - **最小化前台不下沉（预防）**：`OnDebouncedForegroundRecovery` / `SendToBottom` 在判定前先查 `NativeMethods.IsIconic(foreground)`，为 true 则跳过 `HWND_BOTTOM`。最小化窗口不遮挡任何东西，把 fence 沉到它"之下"必然沉到壁纸下。典型场景：任务栏闪烁图标多是最小化应用在请求关注，鼠标移过去释放前台锁后它抢到前台但仍最小化。
   - ⚠️ **`IsIconic` 判断必须延迟到 200ms 防抖之后，不能在 `OnForegroundChanged` 即时执行**：窗口在还原动画初期（Win+D 第二次恢复 / 点任务栏还原最小化窗口）仍短暂 `IsIconic`，即时 `return` 会让 fence 永不下沉、卡在恢复窗口前面（bug 35 回归）。延迟到防抖后，正在还原的窗口已退出 iconic（应下沉），单纯闪烁、保持最小化的窗口仍 iconic（不下沉），两者自然区分。
+  - ⚠️ **同理，绕过防抖、直接 `SetAllBottom → SendToBottom` 的即时恢复路径也会踩同一个坑**（bug 36/37）：恢复瞬间前台仍是桌面 / 还原中的 iconic 窗口，`SendToBottom` 的 `IsDesktopOrTaskbarWindow || IsIconic` 守卫即时拦下、`HWND_BOTTOM` 从未执行，`_isTopmost` 已清但 overlay+fence 物理仍停 `HWND_TOPMOST` → 一起卡顶层。`SetAllBottom` 有 **4 条**这样的调用路径（Win+D restore 的 `_isTopmost`/`_pendingTopmost`、`ExitPeek`、`OnForegroundChanged` 真实窗口激活分支——典型：最大化窗口按 Win+D 后点任务栏另一窗口还原）。**修复：把延迟重沉收敛进 `SetAllBottom()` 自身**（循环 `SendToBottom` 后统一 `_dispatcher?.BeginInvoke(StartForegroundDebounce)`），复用含延迟 `IsIconic` 判定的 200ms 防抖通道，一次覆盖全部 4 条路径。即时尝试 + 延迟兜底，把卡顶层/不可见的修复从最长 5 秒（z-order 恢复定时器）缩短到 ~200ms。bug 37 教训：别在各调用点手工重复同一段后置防护（漏 1/4 即回归），对所有调用方都成立的兜底应收敛到方法公共出口。
 - **WindowFromPoint 实测遮挡（自愈兜底）**：`IsAnyFenceSunkBehindDesktop()` 对每个可见 fence 取矩形中心点，`WindowFromPoint` 命中桌面类窗口即判定该 fence 已被压到壁纸下，整组 `HoistAllAboveDesktop` 拉回。命中普通 app 窗口（被合法遮挡）则不动（保护 bug 14）。接入点：5 秒恢复定时器开头 + `OnDebouncedForegroundRecovery` 末尾的 50ms 一次性快速复检（`ScheduleSunkRecheck`）。
   - **overlay 不参与探测**：`DesktopIconOverlay` 是 `AllowsTransparency` 层叠窗口、空白处 alpha=0 会被 OS click-through 透传、`WindowFromPoint` 误返回桌面（bug 19）。`RegisterWindow(hwnd, isOverlay: true)` 标记后探测时跳过；它与 fence 一起下沉，靠 fence 触发整组 hoist 一并带回。
+  - **overlay 启动专属自愈（bug 36）**：上一条"靠 fence 带回"的前提是 fence 也沉了。但存在"fence 正常、overlay 启动时单独被压"的情形——自愈探测跳过 overlay、fence 又没沉触发不了整组 hoist → overlay 永远捞不回（叠加层叠透明窗口初次 `Show()` 的 per-pixel alpha 合成可能不绘制）。因此 `DesktopIconOverlay.OnLoaded` 注册后安排两拍（100ms / 500ms）一次性自愈：`EnsureOverlayVisible`（「借用 topmost」拉到壁纸上方，不改 `_isTopmost`）+ `InvalidateVisual/UpdateLayout`（强制 per-pixel alpha 重组）。不调 `WindowFromPoint`、不碰 overlay 画刷/alpha，不引 bug 19。
 
 ### 窗口样式
 

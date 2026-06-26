@@ -81,20 +81,15 @@ public sealed class DesktopEmbedManager : IDisposable
                 }
 
                 var foreground = NativeMethods.GetForegroundWindow();
-                if (WindowClassUtil.IsDesktopWindow(foreground))
+                if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
                 {
-                    // 真桌面前台 (Progman/WorkerW/SHELLDLL_DefView/SysListView32)：
-                    // 窗口可能已被 DWM 压到壁纸下，主动用 HWND_TOPMOST 拉回；
-                    // 不修改 _isTopmost——切到普通窗口时由
-                    // OnDebouncedForegroundRecovery → SendToBottom(HWND_BOTTOM) 自动降级。
-                    HoistAllAboveDesktop();
-                }
-                else if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
-                {
-                    // 任务栏 / 任务栏菜单前台（典型：右键托盘小图标时 foreground 短暂切到 Shell_TrayWnd）：
-                    // 不主动 hoist——其他程序最大化时若 hoist，fence 会抢到 topmost
-                    // 浮在最大化窗口之上 (bug: tray_right_click_fences_pop_to_front)。
-                    // SendToBottom 在任务栏前台时本身就是 no-op，这里直接跳过。
+                    // 桌面 / 任务栏 / 任务栏菜单前台，且 fence 未沉（上面 IsAnyFenceSunkBehindDesktop
+                    // 已判否 → fence 正常停在 HWND_BOTTOM、可见）：不主动 hoist，不 SendToBottom。
+                    // - 不 hoist：屏幕上有普通窗口时，若仅因前台是桌面/任务栏就 hoist，fence 会被抬到
+                    //   该窗口之上（bug 38：点击桌面 fence 跑到普通窗口 A 上；bug 14：右键托盘小图标
+                    //   时 foreground 短暂切到 Shell_TrayWnd，fence 浮到最大化窗口上）。真被压到壁纸下的
+                    //   情况已由上面的 sunk 自愈处理。
+                    // - 不 SendToBottom：桌面/任务栏前台时 HWND_BOTTOM 可能被 DWM 推到壁纸下，且本就 no-op。
                 }
                 else
                 {
@@ -141,6 +136,27 @@ public sealed class DesktopEmbedManager : IDisposable
     {
         _managedWindows.Remove(hwnd);
         if (_overlayWindow == hwnd) _overlayWindow = IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// True if a visible managed fence window (not the overlay) contains the screen point.
+    /// Used by <see cref="DesktopMarqueeManager"/> to avoid starting a rubber-band drag over
+    /// a fence: fences sit at HWND_BOTTOM, so WindowFromPoint reports the desktop behind them
+    /// (same caveat as PageSwitchManager.IsFenceWindowAtPoint) — a pure class-name check
+    /// would mistake a fence for empty desktop. Rect-containment is the reliable test.
+    /// </summary>
+    internal bool IsPointOverFence(NativeMethods.POINT pt)
+    {
+        foreach (var hwnd in _managedWindows)
+        {
+            if (hwnd == _overlayWindow) continue;
+            if (!NativeMethods.IsWindowVisible(hwnd)) continue;
+            if (NativeMethods.GetWindowRect(hwnd, out var r)
+                && pt.X >= r.Left && pt.X <= r.Right
+                && pt.Y >= r.Top && pt.Y <= r.Bottom)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -220,7 +236,10 @@ public sealed class DesktopEmbedManager : IDisposable
 
         if (_isTopmost)
         {
-            // Was topmost → go back to bottom
+            // Was topmost → go back to bottom.
+            // SetAllBottom 内部已统一安排延迟重沉：Win+D 第二次恢复瞬间前台往往仍是 Progman
+            // 或还原动画初期窗口(IsIconic)，即时 SendToBottom 会 no-op、overlay+fence 卡在
+            // HWND_TOPMOST；延迟重沉在窗口退出 iconic 后把它们正确沉底（bug 36/37）。
             _pendingTopmost = false;
             SetAllBottom();
             StatusChanged?.Invoke("BOTTOM (Win+D restore)");
@@ -231,6 +250,7 @@ public sealed class DesktopEmbedManager : IDisposable
         {
             // Timer was in-flight → user pressed Win+D again before it fired.
             // This means Explorer toggled back (restore windows), so cancel the topmost transition.
+            // 延迟重沉同样由 SetAllBottom 统一兜底。
             _pendingTopmost = false;
             SetAllBottom();
             StatusChanged?.Invoke("BOTTOM (Win+D cancelled)");
@@ -306,14 +326,22 @@ public sealed class DesktopEmbedManager : IDisposable
         }
         else
         {
-            // 真桌面前台（Progman/WorkerW/SHELLDLL_DefView/SysListView32）：
-            // 典型场景是截图工具或最大化窗口关闭后 foreground 立刻回到 Progman；
-            // 此时窗口可能已被 DWM 压到壁纸下，主动用 HWND_TOPMOST 拉回。
-            // 不修改 _isTopmost——切到普通窗口时由 OnDebouncedForegroundRecovery
-            // → SendToBottom(HWND_BOTTOM) 自动降级。
+            // 真桌面前台（Progman/WorkerW/SHELLDLL_DefView/SysListView32），典型场景：
+            // ①点击桌面；②截图工具或最大化窗口关闭后 foreground 立刻回到 Progman。
+            // **仅当 fence 确实被压到壁纸下（IsAnyFenceSunkBehindDesktop 实测遮挡）才借用
+            // HWND_TOPMOST 拉回**；否则 fence 正常停在 HWND_BOTTOM、可见，绝不主动 hoist——
+            // 否则屏幕上有普通窗口 A 时，用户点一下桌面就会把 fence/overlay 抬到 A 之上，
+            // 违反"fence/overlay 永远在其他应用之下"（bug 38）。立即测一次 + 50ms 快速复检，
+            // 兜住"截图工具关闭后下沉略晚于前台事件"的时序（bug 10/2）。借用 topmost 不改
+            // _isTopmost——切到普通窗口时由 SendToBottom(HWND_BOTTOM) 自动降级。
+            // （此前这里无条件 hoist 是 bug 10 时所加，那时尚无 IsAnyFenceSunkBehindDesktop
+            //   这一可靠"是否真沉"判据；bug 35 引入后改为门控。）
             if (WindowClassUtil.IsDesktopWindow(hwnd))
             {
-                HoistAllAboveDesktop();
+                if (IsAnyFenceSunkBehindDesktop())
+                    HoistAllAboveDesktop();
+                else
+                    ScheduleSunkRecheck();
                 return;
             }
 
@@ -411,6 +439,7 @@ public sealed class DesktopEmbedManager : IDisposable
     public void ExitPeek()
     {
         _isPeekActive = false;
+        // 退出 Peek 瞬间前台常是桌面 → 即时 SendToBottom 可能 no-op；延迟重沉由 SetAllBottom 统一兜底。
         SetAllBottom();
     }
 
@@ -434,6 +463,16 @@ public sealed class DesktopEmbedManager : IDisposable
         {
             SendToBottom(hwnd);
         }
+
+        // 统一延迟重沉兜底：上面的即时 SendToBottom 在前台为桌面/任务栏/iconic(还原动画初期
+        // 的窗口)时会命中守卫即时 no-op，HWND_BOTTOM 从未执行 → overlay+fence 卡在原 HWND_TOPMOST。
+        // SetAllBottom 的全部 4 条调用路径（Win+D restore 的 _isTopmost/_pendingTopmost 两分支、
+        // ExitPeek、OnForegroundChanged 真实窗口激活分支）都是"离开 topmost、要回到底部"的转换，
+        // 统一在此安排一次 200ms 防抖后的延迟重沉：届时还原中的窗口已退出 iconic、真正盖住桌面，
+        // OnDebouncedForegroundRecovery 的延迟 IsIconic 判定放行 SendToBottom(HWND_BOTTOM)，把
+        // 不可见/卡顶层窗口的修复从最长 5 秒（z-order 恢复定时器）缩短到 ~200ms。
+        // 收敛到这里（而非各调用点手工补）以杜绝再漏路径（bug 37）。BeginInvoke 防御非 UI 线程调用。
+        _dispatcher?.BeginInvoke(StartForegroundDebounce);
     }
 
     /// <summary>
@@ -551,6 +590,24 @@ public sealed class DesktopEmbedManager : IDisposable
         {
             NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
         }
+
+        HoistSingleAboveDesktop(hwnd);
+    }
+
+    /// <summary>
+    /// 启动 overlay 不显示自愈：DesktopIconOverlay 是 AllowsTransparency 全屏层叠窗口，启动瞬间
+    /// 可能被 DWM 压到壁纸下，且因空白处 alpha=0 透传(bug 19)被排除出 IsAnyFenceSunkBehindDesktop
+    /// 的 WindowFromPoint 自愈探测——一旦它单独沉下(fence 正常)，常规兜底永远捞不回。沿用
+    /// BringNewWindowToFront 的「借用 topmost」用 HWND_TOPMOST 把它拉到壁纸上方，**不修改
+    /// _isTopmost**，后续切普通窗口时由 SendToBottom(HWND_BOTTOM) 隐式降级，不会让 overlay 常驻
+    /// 浮在普通应用之上。渲染层的强制重绘由 overlay 侧 WPF(InvalidateVisual)处理。
+    /// 由 DesktopIconOverlay.OnLoaded 延迟两拍(100ms/500ms)调用。
+    /// </summary>
+    public void EnsureOverlayVisible(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        if (!NativeMethods.IsWindowVisible(hwnd))
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SW_SHOW);
 
         HoistSingleAboveDesktop(hwnd);
     }

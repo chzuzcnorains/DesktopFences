@@ -44,6 +44,20 @@
   - **Capture target 为 Window，mode 为 `CaptureMode.SubTree`**：`Mouse.Capture(this, CaptureMode.SubTree)`——SubTree 模式保留子控件的事件路由（鼠标悬停子按钮仍生效），但保证 mouse up 一定路由到 Window 级 handler
   - **dropIndex 在虚拟序列上计算**（剔除被拖 tab 后的剩余序列），唯一 noop 条件是 `dropIndex == from`。这样拖到相邻位置也能生效，避免"看似拖了但没动"的体验
 
+## 2.5 框选与多选（2026-06-25）
+
+Fence 文件列表支持框选（rubber-band）+ 多选 + 整组拖拽。与桌面覆盖层的框选（见 [desktop-icon-overlay.md §11](desktop-icon-overlay.md)）不同：**fence 是普通可命中 WPF 窗口，无需底层钩子**，直接用标准 WPF 鼠标捕获 + 一层覆盖 `Canvas/Rectangle`（`MarqueeLayer`/`MarqueeRect`，与 `FileListBox` 同 Grid 单元 + 同 Margin 以对齐坐标，`IsHitTestVisible=False`）。
+
+- **选中模型**：复用既有 `FileItemViewModel.IsSelected`（DataTemplate 内 `DataTrigger IsSelected→SelectedBrush` 驱动高亮）。`FencePanel` 实现 `ISelectionContainer`。
+- **框选**：`FileListBox.PreviewMouseLeftButtonDown` 命中点向上回溯——遇 `ListBoxItem`/`ScrollBar` 则放行（交给图标 Border 事件 / 滚动条），仅**空白区**起框选：捕获鼠标、画 `MarqueeRect`、`MouseMove` 时遍历 `Files`，对每个 `ItemContainerGenerator.ContainerFromItem(item)`（虚拟化下仅可见项有容器）用 `TransformToVisual(FileListBox)` 求 bounds 与选框 `IntersectsWith` → 设 `IsSelected`。
+- **多选手势**（`FileItem_MouseLeftButtonDown`）：Ctrl 点击 toggle；Shift 点击按 `Files` 下标做范围选（锚点 `_selectionAnchor`）；点已选中项保留多选（供整组拖拽）；普通点击清空+单选。
+- **整组拖拽**（`FileItem_MouseMove`）：被拖项已选中且选中数>1 → `DataObject` 携**全部**选中路径（沿用 `InternalDragFormats.Marker`/`SourceFenceId`），`result==Move` 时移除全部被拖路径。目标 fence `OnDrop` 已按 `string[]` 处理，无需改动。
+- **全局互斥单一选区**：`DesktopSelectionCoordinator`（弱引用注册各 `FencePanel` + 桌面 overlay）。任一容器开始新选择前调 `NotifyActivated(self)`，协调器清空**其它**容器选中——同一时刻只有一个容器持有选区（类资源管理器）。App 持有单例，经 `FenceHost` 构造参数透传给 `FenceContent.SelectionCoordinator`，并赋给 overlay。
+
+**已知限制**：暂无 Delete 键批量删除（fence 窗口 `WS_EX_NOACTIVATE` 拿不到键盘焦点，本期产品决策不做，删除仍走单文件原生右键）；右键多选仍弹单文件 Shell 菜单；多文件同 fence 自拖不重排（落到 `OnDrop` add/remove 空操作，安全无数据损失，单文件自拖重排见 §3.5 Phase 14c）；框选不自动滚动，仅命中可见项。
+
+**涉及文件**：[DesktopSelectionCoordinator.cs](../../src/DesktopFences.UI/Controls/DesktopSelectionCoordinator.cs)（新增）、[FencePanel.xaml](../../src/DesktopFences.UI/Controls/FencePanel.xaml)/[.xaml.cs](../../src/DesktopFences.UI/Controls/FencePanel.xaml.cs)、[FenceHost.xaml.cs](../../src/DesktopFences.UI/Controls/FenceHost.xaml.cs)、[DesktopIconOverlay.xaml.cs](../../src/DesktopFences.UI/Controls/DesktopIconOverlay.xaml.cs)、[App.xaml.cs](../../src/DesktopFences.App/App.xaml.cs)。
+
 ## 3. 文件图标渲染
 
 ### 双模式切换

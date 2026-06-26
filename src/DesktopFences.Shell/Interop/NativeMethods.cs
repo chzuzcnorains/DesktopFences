@@ -48,6 +48,9 @@ internal static class NativeMethods
     public const int VK_SPACE = 0x20;
     public const int VK_ESCAPE = 0x1B;
     public const int VK_MENU = 0x12; // Alt key
+    public const int VK_SHIFT = 0x10;
+    public const int VK_CONTROL = 0x11;
+    public const int VK_DELETE = 0x2E;
 
     // --- Hotkey registration ---
     public const uint MOD_WIN = 0x0008;
@@ -114,6 +117,7 @@ internal static class NativeMethods
 
     // --- Mouse Hook ---
     public const int WH_MOUSE_LL = 14;
+    public const int WM_MOUSEMOVE = 0x0200;
     public const int WM_LBUTTONDBLCLK = 0x0203;
     public const int WM_LBUTTONDOWN = 0x0201;
     public const int WM_LBUTTONUP = 0x0202;

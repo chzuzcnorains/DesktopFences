@@ -22,3 +22,5 @@
 - [Phase 12 Polish: Shell 抽图改用 IShellItemImageFactory + Shell 风格解禁到 UI](phase-12-polish.md) ✅
 - [Phase 13 Polish: Tab 拖拽排序 + Portal 规则隔离修复](phase-13-polish.md) ✅
 - [Phase 14: Fence 呈现方式切换（图标/列表/详细）+ 排序（字段 + 手动拖拽）](phase-14.md) ✅（代码完成，待手动验收）
+- 桌面框选（Rubber-band 多选）：低侵入钩子 `DesktopMarqueeManager` + 覆盖层自绘选框/多选/组拖入 fence/Delete 批删/Ctrl-Shift 增量，设计见 [desktop-icon-overlay.md §11](../design/desktop-icon-overlay.md) ✅（代码完成，待手动验收）
+- Fence 内框选 + 多选：标准 WPF 鼠标捕获 + `MarqueeLayer`，复用 `FileItemViewModel.IsSelected`，Ctrl/Shift 手势 + 整组拖拽 + 全局互斥单一选区（`DesktopSelectionCoordinator`），设计见 [fence-container.md §2.5](../design/fence-container.md) ✅（代码完成，待手动验收）

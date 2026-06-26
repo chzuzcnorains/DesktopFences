@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -14,7 +15,7 @@ using DesktopFences.UI.ViewModels;
 
 namespace DesktopFences.UI.Controls;
 
-public partial class FencePanel : UserControl
+public partial class FencePanel : UserControl, ISelectionContainer
 {
     public static readonly DependencyProperty InnerContentProperty =
         DependencyProperty.Register(nameof(InnerContent), typeof(object), typeof(FencePanel));
@@ -51,6 +52,13 @@ public partial class FencePanel : UserControl
     public event Action? InteractionStarted;
     public event Action? InteractionEnded;
     public event Action? CloseRequested;
+
+    /// <summary>Raised around an in-app file drag (DoDragDrop). App uses these to put the
+    /// desktop overlay into drop-target mode so a file dragged out of a fence onto the
+    /// desktop lands on the overlay instead of falling through to the native desktop
+    /// (which would raise a same-folder "源文件名和目标文件名相同" error — bug 39).</summary>
+    public event Action? InternalFileDragStarted;
+    public event Action? InternalFileDragEnded;
 
     /// <summary>Allow FenceHost to raise InteractionStarted (e.g. tab strip drag).</summary>
     public void RaiseInteractionStarted() => InteractionStarted?.Invoke();
@@ -91,6 +99,15 @@ public partial class FencePanel : UserControl
     private bool _isDraggingFile;
     private bool _isHoverExpanded;
 
+    // Multi-selection + marquee state
+    private bool _isMarqueeSelecting;
+    private Point _marqueeOrigin;                       // in FileListBox coordinate space
+    private List<FileItemViewModel> _marqueeBaseline = []; // selection snapshot for additive (Ctrl/Shift) marquee
+    private FileItemViewModel? _selectionAnchor;        // anchor for Shift range selection
+
+    /// <summary>Enforces a single mutually-exclusive selection across all fences + the desktop overlay.</summary>
+    public DesktopSelectionCoordinator? SelectionCoordinator { get; set; }
+
     /// <summary>
     /// Set by FenceHost when in MenuOnly tab mode to provide tab titles.
     /// </summary>
@@ -100,6 +117,11 @@ public partial class FencePanel : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+
+        // Marquee selection on empty list area (item Borders handle their own clicks).
+        FileListBox.PreviewMouseLeftButtonDown += FileListBox_PreviewMouseLeftButtonDown;
+        FileListBox.MouseMove += FileListBox_MouseMove;
+        FileListBox.MouseLeftButtonUp += FileListBox_MouseLeftButtonUp;
     }
 
     private FencePanelViewModel? ViewModel => DataContext as FencePanelViewModel;
@@ -653,6 +675,8 @@ public partial class FencePanel : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        SelectionCoordinator?.Register(this);
+
         _hostWindow = Window.GetWindow(this);
         if (_hostWindow is null) return;
         _hostWindow.Activated += OnHostActivated;
@@ -669,6 +693,8 @@ public partial class FencePanel : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        SelectionCoordinator?.Unregister(this);
+
         if (_subscribedVm is not null)
         {
             _subscribedVm.PropertyChanged -= OnViewModelPropertyChanged;
@@ -760,11 +786,49 @@ public partial class FencePanel : UserControl
             return;
         }
 
-        // Single click → select + prepare for drag
-        ClearSelection();
-        item.IsSelected = true;
+        // Single click → modifier-aware selection + prepare for drag.
+        // NotifyActivated clears other fences / the desktop (global single selection).
+        SelectionCoordinator?.NotifyActivated(this);
+
+        bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+
+        if (ctrl)
+        {
+            item.IsSelected = !item.IsSelected;   // toggle, keep the rest
+            _selectionAnchor = item;
+        }
+        else if (shift && _selectionAnchor is not null)
+        {
+            SelectRange(_selectionAnchor, item);  // range from anchor
+        }
+        else if (item.IsSelected)
+        {
+            // Already part of a multi-selection → keep it so a drag moves the whole group.
+            _selectionAnchor = item;
+        }
+        else
+        {
+            ClearSelection();
+            item.IsSelected = true;
+            _selectionAnchor = item;
+        }
+
         _dragStartPoint = e.GetPosition(this);
         _isDraggingFile = false;
+    }
+
+    /// <summary>Shift-range select: select every item between the anchor and target (inclusive).</summary>
+    private void SelectRange(FileItemViewModel anchor, FileItemViewModel target)
+    {
+        if (ViewModel is null) return;
+        int a = ViewModel.Files.IndexOf(anchor);
+        int b = ViewModel.Files.IndexOf(target);
+        if (a < 0 || b < 0) return;
+        if (a > b) (a, b) = (b, a);
+
+        for (int i = 0; i < ViewModel.Files.Count; i++)
+            ViewModel.Files[i].IsSelected = i >= a && i <= b;
     }
 
     private void FileItem_MouseMove(object sender, MouseEventArgs e)
@@ -788,20 +852,42 @@ public partial class FencePanel : UserControl
         if (_isDraggingFile) return;
         _isDraggingFile = true;
 
-        var dataObject = new DataObject(DataFormats.FileDrop, new[] { item.FilePath });
+        // Group drag: if the pressed item is part of a multi-selection, carry all selected paths.
+        var selected = ViewModel?.Files.Where(f => f.IsSelected).Select(f => f.FilePath).ToArray();
+        string[] paths = (item.IsSelected && selected is { Length: > 1 })
+            ? selected
+            : [item.FilePath];
+
+        var dataObject = new DataObject(DataFormats.FileDrop, paths);
         // 内部拖拽标记：目标 fence 据此回报 Move（移动语义），Explorer 会忽略该格式。
         dataObject.SetData(InternalDragFormats.Marker, true);
-        // 来源 fence id：drop 落到同一 fence 时识别为"自拖自"→ 原地重排（Phase 14c）。
+        // 来源 fence id：drop 落到同一 fence 时识别为"自拖自"→ 原地重排（Phase 14c，仅单文件）。
         if (ViewModel is not null)
             dataObject.SetData(InternalDragFormats.SourceFenceId, ViewModel.Id.ToString());
-        var result = DragDrop.DoDragDrop(element, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 
-        if (result == DragDropEffects.Move && ViewModel is not null)
+        // 拖拽期间让桌面 overlay 进入放置目标模式，避免拖到桌面空白区穿透到真实桌面
+        // 触发同名移动错误（bug 39）。整段包 try/finally：DoDragDrop / 事件链一旦抛异常，
+        // 必须复位 _isDraggingFile，否则该 fence 后续所有拖拽被 `if (_isDraggingFile) return;`
+        // 静默吞掉（表现为"多文件拖拽没有响应"——多选拖拽更易触发某个抛点）。
+        try
         {
-            ViewModel.RemoveFile(item.FilePath);
-        }
+            InternalFileDragStarted?.Invoke();
+            var result = DragDrop.DoDragDrop(element, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 
-        _isDraggingFile = false;
+            if (result == DragDropEffects.Move && ViewModel is not null)
+            {
+                foreach (var p in paths)
+                    ViewModel.RemoveFile(p);
+                // 源 fence 丢失文件的状态需持久化，否则重启后文件又回到 fence。
+                // （同时修复 fence→fence 移动不持久化的既有隐患。）
+                InteractionEnded?.Invoke();
+            }
+        }
+        finally
+        {
+            InternalFileDragEnded?.Invoke();
+            _isDraggingFile = false;
+        }
     }
 
     private void FileItem_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -809,8 +895,14 @@ public partial class FencePanel : UserControl
         if (sender is not FrameworkElement element || element.DataContext is not FileItemViewModel item)
             return;
 
-        ClearSelection();
-        item.IsSelected = true;
+        // Keep an existing multi-selection if right-clicking one of its items; otherwise
+        // select just this item. (Shell menu still operates on the single right-clicked file.)
+        SelectionCoordinator?.NotifyActivated(this);
+        if (!item.IsSelected)
+        {
+            ClearSelection();
+            item.IsSelected = true;
+        }
 
         var hostWindow = Window.GetWindow(this);
         if (hostWindow is null) return; // 控件已脱离视觉树（fence 正在关闭）
@@ -871,11 +963,96 @@ public partial class FencePanel : UserControl
         }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
-    private void ClearSelection()
+    public void ClearSelection()
     {
         if (ViewModel is null) return;
         foreach (var file in ViewModel.Files)
             file.IsSelected = false;
+    }
+
+    // ── Marquee (rubber-band) selection on empty list area ─────
+
+    private void FileListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is null) return;
+        // Only empty area starts a marquee — presses on an item / scrollbar fall through
+        // to the item Border handlers or the scrollbar.
+        if (IsOverItemOrScrollBar(e.OriginalSource as DependencyObject)) return;
+
+        SelectionCoordinator?.NotifyActivated(this); // global single selection
+
+        bool additive = (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0;
+        if (additive)
+            _marqueeBaseline = ViewModel.Files.Where(f => f.IsSelected).ToList();
+        else
+        {
+            ClearSelection();
+            _marqueeBaseline = [];
+        }
+        _selectionAnchor = null;
+
+        _marqueeOrigin = e.GetPosition(FileListBox);
+        _isMarqueeSelecting = true;
+        UpdateMarqueeRect(_marqueeOrigin, _marqueeOrigin);
+        MarqueeRect.Visibility = Visibility.Visible;
+        FileListBox.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void FileListBox_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_isMarqueeSelecting) return;
+        var current = e.GetPosition(FileListBox);
+        UpdateMarqueeRect(_marqueeOrigin, current);
+
+        bool additive = (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) != 0;
+        ApplyMarqueeSelection(new Rect(_marqueeOrigin, current), additive);
+    }
+
+    private void FileListBox_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isMarqueeSelecting) return;
+        _isMarqueeSelecting = false;
+        FileListBox.ReleaseMouseCapture();
+        MarqueeRect.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Select every realized item whose bounds intersect the marquee (FileListBox space);
+    /// in additive mode keep the pre-drag baseline as a union. Virtualized (off-screen) items have
+    /// no container and can't be under the rectangle anyway, so they're skipped.</summary>
+    private void ApplyMarqueeSelection(Rect marquee, bool additive)
+    {
+        if (ViewModel is null) return;
+        foreach (var item in ViewModel.Files)
+        {
+            bool inMarquee = false;
+            if (FileListBox.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement container
+                && container.IsVisible)
+            {
+                var topLeft = container.TransformToVisual(FileListBox).Transform(new Point(0, 0));
+                var bounds = new Rect(topLeft, new Size(container.ActualWidth, container.ActualHeight));
+                inMarquee = marquee.IntersectsWith(bounds);
+            }
+            item.IsSelected = inMarquee || (additive && _marqueeBaseline.Contains(item));
+        }
+    }
+
+    private void UpdateMarqueeRect(Point a, Point b)
+    {
+        Canvas.SetLeft(MarqueeRect, Math.Min(a.X, b.X));
+        Canvas.SetTop(MarqueeRect, Math.Min(a.Y, b.Y));
+        MarqueeRect.Width = Math.Abs(a.X - b.X);
+        MarqueeRect.Height = Math.Abs(a.Y - b.Y);
+    }
+
+    private static bool IsOverItemOrScrollBar(DependencyObject? d)
+    {
+        while (d is not null)
+        {
+            if (d is ListBoxItem or ScrollBar) return true;
+            d = VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d);
+        }
+        return false;
     }
 
     // ── Rollup ───────────────────────────────────────────────

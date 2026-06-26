@@ -594,6 +594,17 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
+
+                <!-- Rubber-band (marquee) selection overlay. Same Grid cell + margin as
+                     FileListBox so its coordinate space aligns; never blocks hit-testing. -->
+                <Canvas x:Name="MarqueeLayer" Grid.Row="2" Margin="4,2,4,4"
+                        IsHitTestVisible="False" ClipToBounds="True">
+                    <Rectangle x:Name="MarqueeRect"
+                               Visibility="Collapsed"
+                               StrokeThickness="1"
+                               Fill="#3333AAFF"
+                               Stroke="#CC33AAFF" />
+                </Canvas>
             </Grid>
         </Border>
 

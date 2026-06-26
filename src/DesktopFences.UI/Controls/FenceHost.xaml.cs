@@ -18,6 +18,7 @@ public partial class FenceHost : Window
 {
     private readonly DesktopEmbedManager _embedManager;
     private readonly ShellIconExtractor? _iconExtractor;
+    private readonly DesktopSelectionCoordinator? _selectionCoordinator;
     private readonly List<FencePanelViewModel> _tabs = [];
     private int _activeTabIndex;
     private bool _isClosing;
@@ -70,12 +71,15 @@ public partial class FenceHost : Window
     public event Action<FencePanelViewModel>? TabDetachRequested;
 
 public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel,
-                     ShellIconExtractor? iconExtractor = null)
+                     ShellIconExtractor? iconExtractor = null,
+                     DesktopSelectionCoordinator? selectionCoordinator = null)
     {
         InitializeComponent();
 
         _embedManager = embedManager;
         _iconExtractor = iconExtractor;
+        _selectionCoordinator = selectionCoordinator;
+        FenceContent.SelectionCoordinator = selectionCoordinator;
 
         // Add first tab
         _tabs.Add(viewModel);

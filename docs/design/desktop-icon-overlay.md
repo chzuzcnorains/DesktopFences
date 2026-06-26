@@ -184,7 +184,9 @@ Canvas.SetTop(border, currentPos.Y - _moveOffset.Y);
 
 ### 6.3 OLE 拖放模式（跨窗口）
 
-**触发条件**：拖拽中鼠标移动到覆盖层边缘 20px 范围内
+**触发条件**：拖拽中鼠标**落在某个 fence 之上**（`_embedManager.IsPointOverFence(PointToScreen(pos))`），
+或移动到覆盖层边缘 20px 范围内。前者是 bug 39 补的：否则单个未归档图标拖到屏幕中间的 fence 上
+只会在桌面内挪位置、永远进不了 fence（"单文件 overlay→fence 没反应"）。多选拖拽则直接走 OLE（§6.x 组拖）。
 
 **实现**：
 ```csharp
@@ -194,18 +196,75 @@ _isDragging = true;
 var dataObject = new DataObject(DataFormats.FileDrop, new[] { filePath });
 // 内部拖拽标记（bug 27）：目标 fence 据此回报 Move，本侧才会移除 overlay 图标
 dataObject.SetData(InternalDragFormats.Marker, true);
-var result = DragDrop.DoDragDrop(border, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
-
-if (result == DragDropEffects.Move)
+// try/finally 仅用于复位 _isDragging（异常也不能卡死后续拖拽）。
+// 注意：overlay 自己发起的拖拽**绝不**调用 BeginDropTargetMode——那会让 overlay 变成
+// 全屏竞争放置目标、抢走本该落到 fence 的 drop（这些 icon 已在 overlay 上 → OnOverlayDrop
+// 回报 None → fence 收不到、图标不动，bug 39 回归）。放置目标模式只在「fence→overlay」时
+// 由 FencePanel 事件驱动开启，见 §6.4。
+try
 {
-    RemoveIcon(filePath);
-    FileDraggedToFence?.Invoke(filePath);
+    var result = DragDrop.DoDragDrop(border, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
+    if (result == DragDropEffects.Move)
+    {
+        RemoveIcon(filePath);
+        FileDraggedToFence?.Invoke(filePath);
+    }
 }
+finally { _isDragging = false; }
 ```
 
 > 拖入 fence = **移动**语义：`FencePanel.OnDrop` 检测到 `InternalDragFormats.Marker` 且实际
 > 新增条目时回报 `DragDropEffects.Move`，本侧据此移除 overlay 图标——修复了此前 OnDrop
 > 不设置 Effects 导致 `result == Move` 永不成立、图标残留的问题（bug 27）。
+
+### 6.4 overlay 作为放置目标（fence → overlay，bug 39）
+
+overlay 平时**不是** OLE 放置目标：空白区 alpha=0 被 OS 判为 click-through，OLE 放置命中
+（`WindowFromPoint`）会穿透到真实桌面。从 Fence 拖文件落到 overlay 空白区时，桌面把"已在
+Desktop 文件夹的文件"当作同文件夹移动 → 弹"源文件名和目标文件名相同"，且 overlay 收不到
+通知去 `AddIcon`，文件两处都不显示。
+
+修复：让 overlay 仅在**应用内拖拽进行期间**临时成为合法放置目标。
+
+```csharp
+// 拖拽起：整窗切到 alpha=1（视觉不可感知）+ AllowDrop，令层叠窗口可命中
+public void BeginDropTargetMode()
+{
+    AllowDrop = true;
+    Background = ClickableTransparentBrush;          // Window 背景；Canvas 仍 {x:Null}
+    InvalidateVisual(); UpdateLayout();              // 促使层叠窗口按新 alpha 重组
+}
+// 拖拽止：还原 alpha=0 click-through，恢复桌面右键菜单 / 双击隐藏 / 框选
+public void EndDropTargetMode()
+{
+    AllowDrop = false;
+    Background = Brushes.Transparent;
+    InvalidateVisual();
+}
+
+private void OnOverlayDrop(object sender, DragEventArgs e)
+{
+    e.Handled = true;                                 // 即便 no-op 也消费，杜绝穿透到桌面
+    if (!e.Data.GetDataPresent(InternalDragFormats.Marker)) { e.Effects = None; return; }
+    if (e.Data.GetData(DataFormats.FileDrop) is not string[] files) { e.Effects = None; return; }
+
+    bool anyAdded = false;
+    foreach (var p in files)
+    {
+        if (ContainsIcon(p)) continue;                // overlay 自拖自 / 重复
+        if (IsDesktopFile is not null && !IsDesktopFile(p)) continue; // 跳过 portal/外部文件
+        AddIcon(p); anyAdded = true;
+    }
+    e.Effects = anyAdded ? DragDropEffects.Move : DragDropEffects.None; // Move → 源 fence 删条目
+}
+```
+
+- 切换时机由 **FencePanel** 的 `InternalFileDragStarted` / `InternalFileDragEnded` 事件驱动
+  （包住 `FileItem_MouseMove` 的 `DoDragDrop`），App 接到事件后调 overlay 的 `Begin/EndDropTargetMode`。
+- `IsDesktopFile` 谓词由 App 注入（复用 `App.IsDesktopFile`），过滤掉 portal fence 的外部文件。
+- 仅内部拖拽期间开启 → **Explorer→桌面 的复制不受影响**（那时 `AllowDrop` 仍为 false，放置穿透到桌面由系统复制）。
+- 源 Fence 删条目后由 `FencePanel` 补发 `InteractionEnded` → `RequestAutoSave`，保证"未归档"状态持久化（重启不回退）。
+- **绝不能长期 alpha=1**：那会破坏空白区 click-through（回归 bug 19 / 原生右键菜单 / 框选）。
 
 ---
 
@@ -283,14 +342,75 @@ OnExit
 |------|-----------|
 | 文件被自动分类到 Fence | `RemoveIcon(filePath)` |
 | 新文件未匹配规则 | `AddIcon(filePath)` |
-| 文件从 Fence 移出 | `AddIcon(filePath)` |
+| 文件从 Fence 移出（程序事件） | `AddIcon(filePath)` |
+| 文件**从 Fence 拖到 overlay** | overlay 自身 `OnOverlayDrop` → `AddIcon`（bug 39，见 §6.4） |
 | 文件被删除 | `RemoveIcon(filePath)` |
 | 文件重命名 | 更新显示名 |
 | Fence 可见性切换 | 同步隐藏/显示 |
 
 ---
 
-## 11. 历史调整记录
+## 11. 框选多选（Rubber-band / Marquee）
+
+### 11.1 为什么不能用 Windows 原生框选
+
+原生桌面框选矩形由 `SysListView32`（桌面图标 ListView）绘制。本应用 `DesktopIconManager.HideIcons()` 把整个 `SysListView32` `ShowWindow(SW_HIDE)` 隐藏、改由覆盖层自绘图标，原生框选随之**永远不可能出现**。覆盖层必须**自行绘制并管理框选**。
+
+### 11.2 承重墙约束：空白区 click-through 必须保留
+
+覆盖层空白区是 `Canvas Background={x:Null}`（每像素 alpha=0），点击会透传到真实桌面。这层透传是承重墙——以下原生行为都依赖它：
+- 桌面空白处**右键原生菜单**（新建 / 个性化 / 刷新）透传到 `Progman`/`WorkerW`；
+- **双击快速隐藏 fence**（`QuickHideManager` 用 `WindowFromPoint` 判定命中真实桌面）。
+
+因此**不能**把覆盖层整层改成可命中（alpha=1）来抓框选，否则上述行为会一起失效。
+
+### 11.3 低侵入钩子方案
+
+输入检测放在 Shell 层 `DesktopMarqueeManager`（`WH_MOUSE_LL` + `WH_KEYBOARD_LL`），几何/视觉/选中逻辑放在覆盖层：
+
+- `WM_LBUTTONDOWN`：`WindowClassUtil.IsDesktopAtPoint(pt)` 为真且 `!DesktopEmbedManager.IsPointOverFence(pt)`（fence 坐 `HWND_BOTTOM`，`WindowFromPoint` 会误返回其后的桌面，故需矩形包含判断）→ 记录起点、置 `_armed`。按在覆盖层图标上（alpha=1）时 `IsDesktopAtPoint` 为假，自然让逐图标 WPF 事件接管，互不干扰。
+- `WM_MOUSEMOVE`：位移超 4px → `_dragging`，以**屏幕像素**抛 `MarqueeUpdated(ScreenRect, additive)`。
+- `WM_LBUTTONUP`：拖拽 → `MarqueeCompleted`；无位移单击 → `EmptyClicked`（清空选中）。
+- 钩子**全程 `CallNext`，绝不吞事件**——桌面透传行为不变。与 `QuickHideManager` 正交：快速隐藏只在「无位移双击」触发，框选只在「拖拽」触发。
+- `WH_KEYBOARD_LL`：覆盖层 `HasSelection==true` 时，Delete → `DeleteRequested`，Esc → `Cancelled`。
+
+事件经 `Dispatcher.Invoke`（删除用 `InvokeAsync`，避免回收站确认框阻塞钩子）回到覆盖层。
+
+### 11.4 覆盖层侧：选框、命中、选中模型
+
+- **坐标转换**：`IconCanvas.PointFromScreen(物理像素)` → 画布 DIP，自动含 DPI 缩放与窗口偏移，无需手算 `_dpiScale`。
+- **选框矩形**：`IconCanvas` 内一个高 ZIndex、`IsHitTestVisible=false` 的 `Rectangle`（半透明蓝填充 + 蓝边框），拖拽时显示、定稿后隐藏。
+- **选中集合** `_selectedPaths`：`SetSelected(path,bool)` 同步集合与 cell 高亮（选中 `SelectedBrush` alpha=0x44，取消回 `ClickableTransparentBrush` alpha=1，**不可用 alpha=0** 否则空白区重新 click-through）。
+- **命中**：每个图标 `Rect(Canvas.Left, Canvas.Top, CellWidth, CellHeight)` 与选框 `IntersectsWith`。additive（Ctrl/Shift 拖框）时与拖拽开始时的 `_marqueeBaseline` 求并集。
+
+### 11.5 组操作
+
+| 操作 | 行为 |
+|------|------|
+| **框选** | 拖拽出选框，框内图标实时高亮进入 `_selectedPaths` |
+| **整组拖入 fence** | 按住选中图标之一拖拽→直接 OLE 拖放，`DataObject` 携带**全部**选中路径 + `InternalDragFormats.Marker`；fence `OnDrop` 已按 `string[]` 处理，无需改动；返回 `Move` 时逐个 `RemoveIcon` |
+| **Delete 批量删除** | 逐个 `ShellFileOperations.DeleteToRecycleBin` → `RemoveIcon` |
+| **Ctrl/Shift 单击图标** | toggle 该图标，不清空其余 |
+| **空白单击 / Esc** | 清空选中 |
+
+### 11.6 已知限制
+
+- 覆盖层仅覆盖**主屏工作区**；副屏空白处拖框不绘制/不选中（沿用覆盖层既有主屏限制，见 [multi-monitor.md](multi-monitor.md)）。
+- 右键命中多选中之一时仍弹**单文件** Shell 菜单（多文件上下文菜单未实现）。
+- Shift 范围选当前等价于「追加单个」，几何范围选为后续增强。
+- 覆盖层被快速隐藏（`Hide()`）期间框选事件直接忽略（`IsVisible` 守卫）。
+
+**涉及文件**：`DesktopMarqueeManager.cs`（新增）、`DesktopIconOverlay.xaml.cs`、`DesktopEmbedManager.IsPointOverFence`、`NativeMethods`（`WM_MOUSEMOVE`/`VK_DELETE`/`VK_CONTROL`/`VK_SHIFT`）、`App.xaml.cs`（`CreateDesktopOverlay` 装配 + `OnExit` 释放）。
+
+---
+
+## 12. 历史调整记录
+
+### 2026-06-25: 桌面框选（Rubber-band 多选）
+
+**需求**：启动后桌面无法再用 Windows 原生拖拽框选一次选中多个图标（根因：`SysListView32` 已隐藏，原生框选矩形不可能出现）。
+
+**实现**：低侵入 `WH_MOUSE_LL`/`WH_KEYBOARD_LL` 钩子（`DesktopMarqueeManager`）只观察不吞事件，覆盖层自绘选框 + 多选 + 组拖入 fence + Delete 批删 + Ctrl/Shift 增量。保留桌面空白右键原生菜单与双击快速隐藏（详见本文 §11）。
 
 ### 2026-04-28: 图标尺寸与 .lnk 后缀优化
 

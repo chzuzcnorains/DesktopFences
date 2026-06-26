@@ -42,6 +42,9 @@ public partial class App : Application
     private UI.Controls.SnapGuideOverlay? _snapGuideOverlay;
     private DesktopIconManager? _desktopIconManager;
     private DesktopIconOverlay? _desktopOverlay;
+    private DesktopMarqueeManager? _marqueeManager;
+    // Enforces a single mutually-exclusive selection across all fences + the desktop overlay.
+    private readonly DesktopSelectionCoordinator _selectionCoordinator = new();
     private SettingsWindow? _settingsWindow;
     private readonly string _desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
     private readonly string _publicDesktopPath = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
@@ -1200,7 +1203,7 @@ public partial class App : Application
         vm.Width = clamped.Width;
         vm.Height = clamped.Height;
 
-        var host = new FenceHost(_embedManager!, vm, _iconExtractor);
+        var host = new FenceHost(_embedManager!, vm, _iconExtractor, _selectionCoordinator);
         SetupFenceHostEvents(host, vm);
         _fenceWindows.Add(host);
 
@@ -1278,6 +1281,12 @@ public partial class App : Application
             TryMergeFences(host);
             RequestAutoSave();
         };
+
+        // During an in-app file drag, flip the desktop overlay into drop-target mode so a
+        // file dragged out of this fence onto the desktop lands on the overlay (logical
+        // unfence) instead of passing through to the native desktop (bug 39).
+        host.Panel.InternalFileDragStarted += () => _desktopOverlay?.BeginDropTargetMode();
+        host.Panel.InternalFileDragEnded += () => _desktopOverlay?.EndDropTargetMode();
 
         // Handle WM_EXITSIZEMOVE (drag/resize via Win32 messages)
         host.InteractionEndedFromWndProc += () =>
@@ -1417,7 +1426,7 @@ public partial class App : Application
 
         vm.X = newX;
         vm.Y = newY;
-        var newHost = new FenceHost(_embedManager!, vm, _iconExtractor);
+        var newHost = new FenceHost(_embedManager!, vm, _iconExtractor, _selectionCoordinator);
         SetupFenceHostEvents(newHost, vm);
         _fenceWindows.Add(newHost);
         _pageManager?.AssignFenceToCurrentPage(vm.Id);
@@ -1846,8 +1855,20 @@ public partial class App : Application
         if (_embedManager is null || _iconExtractor is null) return;
 
         _desktopOverlay = new DesktopIconOverlay(_embedManager, _iconExtractor);
+        _desktopOverlay.SelectionCoordinator = _selectionCoordinator; // before Show() → registered in OnLoaded
+        _desktopOverlay.IsDesktopFile = IsDesktopFile; // drop handler ignores non-desktop (portal) sources
         _desktopOverlay.SetIcons(items);
         _desktopOverlay.Show();
+
+        // Native-style rubber-band (marquee) selection on the desktop background.
+        // The manager's low-level mouse hook observes empty-desktop drags without consuming
+        // them (so the native right-click menu / double-click quick-hide still work); the
+        // overlay draws the rectangle and manages the selected icon set.
+        _marqueeManager = new DesktopMarqueeManager(
+            _embedManager,
+            hasSelection: () => _desktopOverlay?.HasSelection == true);
+        _desktopOverlay.AttachMarquee(_marqueeManager);
+        _marqueeManager.Start();
     }
 
     private async Task SaveFencesAsync()
@@ -1962,6 +1983,8 @@ public partial class App : Application
         _isShuttingDown = true;
         _snapGuideOverlay?.Close();
         _snapGuideOverlay = null;
+        _marqueeManager?.Dispose();
+        _marqueeManager = null;
         _desktopOverlay?.Close();
         _desktopOverlay = null;
         _desktopIconManager?.ShowIcons();
