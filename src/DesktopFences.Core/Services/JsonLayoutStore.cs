@@ -168,7 +168,11 @@ public class JsonLayoutStore : ILayoutStore
         => await ReadResilientAsync<AppSettings>(SettingsPath) ?? new AppSettings();
 
     public Task SaveSettingsAsync(AppSettings settings)
-        => WriteLockedAsync(SettingsPath, settings);
+        // CloneForPersist() 在调用方（UI）线程同步快照可变集合，再交给后台串行写入：
+        // 调用点普遍 fire-and-forget 传入活的 _appSettings，其 RecentClosedFences 可能被
+        // UI 线程并发修改而 SerializeAsync 正在线程池枚举它（store 内 _writeLock 只串行化写、
+        // 挡不住 UI 线程改 list）。快照后后台只读私有副本，消除边读边写竞态。
+        => WriteLockedAsync(SettingsPath, settings.CloneForPersist());
 
     public Task SaveHiddenFilesAsync(IEnumerable<string> paths)
         => WriteLockedAsync(HiddenFilesPath, paths.ToList());

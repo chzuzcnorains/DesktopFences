@@ -194,6 +194,10 @@ public sealed class ShellIconExtractor
     {
         lock (_lruLock)
         {
+            // 先 Remove 再 AddFirst（与 TouchLru 对齐）：GetIcon 的 check-then-act 非原子，
+            // 两个线程在 miss 时可能为同一 key 各插一次，淘汰后再次加入也会重复 —— 否则
+            // _lruOrder 出现同 key 多个节点，Count 虚高把仍在 _cache 中的活跃项误淘汰。
+            _lruOrder.Remove(key);
             _lruOrder.AddFirst(key);
             while (_lruOrder.Count > _maxCacheSize)
             {

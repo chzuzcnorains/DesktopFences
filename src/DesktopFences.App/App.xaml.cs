@@ -207,6 +207,9 @@ public partial class App : Application
 
     private async Task OrganizeDesktopOnceAsync()
     {
+        // 退出途中不再整理：定时器可能在窗口拆除途中触发，避免对正在 Close 的 fence
+        // 做 AddFile/RemoveIcon。
+        if (_isShuttingDown) return;
         try
         {
             var allFiles = GetAllDesktopEntries();
@@ -2001,6 +2004,8 @@ public partial class App : Application
         _quickHideManager?.Dispose();
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Dispose();
+        _autoOrganizeTimer?.Stop();
+        _autoOrganizeTimer?.Dispose();
         _fileExistenceTimer?.Stop();
         _fileExistenceTimer?.Dispose();
         _trayIcon?.Dispose();

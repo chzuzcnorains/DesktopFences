@@ -302,7 +302,10 @@ public sealed class DesktopEmbedManager : IDisposable
         // Prevents our own UI elements from dismissing Win+D topmost state
         uint foregroundProcessId;
         NativeMethods.GetWindowThreadProcessId(hwnd, out foregroundProcessId);
-        var currentProcessId = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+        // Environment.ProcessId 是缓存的 int，零分配且不持有进程句柄；
+        // OnForegroundChanged 跑在每一次系统级前台切换的回调里（高频），
+        // 旧写法 Process.GetCurrentProcess() 每次都分配一个未释放的 IDisposable。
+        var currentProcessId = (uint)Environment.ProcessId;
         if (foregroundProcessId == currentProcessId)
             return;
 

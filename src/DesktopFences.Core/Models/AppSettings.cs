@@ -155,4 +155,18 @@ public class AppSettings : IJsonOnDeserialized
             FenceBlurRadiusLegacy = null;
         }
     }
+
+    /// <summary>
+    /// 返回一个用于持久化的防御性快照：标量字段按值复制，可变集合
+    /// (<see cref="RecentClosedFences"/>) 复制成独立 list。
+    /// 调用方（UI 线程）在把设置交给后台 <c>JsonSerializer.SerializeAsync</c> 之前
+    /// 先取此快照，避免序列化在线程池枚举 list 的同时 UI 线程 Insert/RemoveAt 同一 list
+    /// （连续关闭多个 fence 时易触发）导致 <see cref="System.InvalidOperationException"/>。
+    /// </summary>
+    public AppSettings CloneForPersist()
+    {
+        var copy = (AppSettings)MemberwiseClone();
+        copy.RecentClosedFences = new List<string>(RecentClosedFences);
+        return copy;
+    }
 }
