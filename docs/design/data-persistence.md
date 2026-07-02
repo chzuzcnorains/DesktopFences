@@ -102,9 +102,11 @@ public int IconSize { get; set; } = 44
 public string AccentColor { get; set; } = "#7AA7E6"
 public int FenceBgHue { get; set; } = 220
 public double FenceOpacity { get; set; } = 0.85
-public int FenceBlurRadius { get; set; } = 26
+public bool FenceBlurEnabled { get; set; } = true
 public List<string> RecentClosedFences { get; set; } = new()
 ```
+
+> 迁移说明：旧字段 `FenceBlurRadius: int`（0..60 滑块）在 Phase 11 Polish 二值化为 `FenceBlurEnabled: bool`。代码中保留 `int? FenceBlurRadiusLegacy`（`[JsonPropertyName("FenceBlurRadius")]`）仅用于反序列化旧 JSON：`OnDeserialized` 将任意正数迁移为 `true`、0 迁移为 `false`，随后清空该字段使其不再序列化输出。详见 [acrylic-blur.md](acrylic-blur.md) § 4。
 
 ## 4. RecentClosedFences FIFO
 

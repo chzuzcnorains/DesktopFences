@@ -43,6 +43,8 @@ public partial class App : Application
     private DesktopIconManager? _desktopIconManager;
     private DesktopIconOverlay? _desktopOverlay;
     private DesktopMarqueeManager? _marqueeManager;
+    // 监听隐藏的原生桌面视图（查看尺寸/排序/刷新），联动到覆盖层
+    private DesktopViewMonitor? _viewMonitor;
     // Enforces a single mutually-exclusive selection across all fences + the desktop overlay.
     private readonly DesktopSelectionCoordinator _selectionCoordinator = new();
     private SettingsWindow? _settingsWindow;
@@ -1860,7 +1862,31 @@ public partial class App : Application
         _desktopOverlay = new DesktopIconOverlay(_embedManager, _iconExtractor);
         _desktopOverlay.SelectionCoordinator = _selectionCoordinator; // before Show() → registered in OnLoaded
         _desktopOverlay.IsDesktopFile = IsDesktopFile; // drop handler ignores non-desktop (portal) sources
+
+        // 桌面右键「查看 / 排序方式 / 刷新」联动：读取隐藏的原生桌面视图（IFolderView2）
+        // 的真实状态。先应用启动前用户已设置的图标尺寸，再铺图标，最后按当前排序重排。
+        _viewMonitor = new DesktopViewMonitor(_desktopIconManager?.GetListViewHandle() ?? IntPtr.Zero);
+        if (_viewMonitor.TryGetIconSize(out int iconSize))
+            _desktopOverlay.SetIconSize(iconSize);
+
         _desktopOverlay.SetIcons(items);
+
+        if (_viewMonitor.TryGetSort(out var sortKey, out bool ascending))
+            _desktopOverlay.SortIcons(sortKey, ascending);
+
+        // 事件已在 UI 线程触发（钩子/定时器装在 UI 线程），Dispatcher 仅防御性兜底
+        _viewMonitor.IconSizeChanged += size =>
+            Dispatcher.InvokeAsync(() => _desktopOverlay?.SetIconSize(size));
+        _viewMonitor.SortChanged += (key, asc) =>
+            Dispatcher.InvokeAsync(() => _desktopOverlay?.SortIcons(key, asc));
+        _viewMonitor.DesktopRefreshed += () =>
+            Dispatcher.InvokeAsync(() =>
+            {
+                _desktopOverlay?.RefreshIcons();   // 已删文件清除 + 图标位图重取
+                _fileMonitor?.RescanNow();         // 新增文件立即补进（不等 30 秒兜底）
+            });
+        _viewMonitor.Start();
+
         _desktopOverlay.Show();
 
         // Native-style rubber-band (marquee) selection on the desktop background.
@@ -1988,6 +2014,8 @@ public partial class App : Application
         _snapGuideOverlay = null;
         _marqueeManager?.Dispose();
         _marqueeManager = null;
+        _viewMonitor?.Dispose();
+        _viewMonitor = null;
         _desktopOverlay?.Close();
         _desktopOverlay = null;
         _desktopIconManager?.ShowIcons();

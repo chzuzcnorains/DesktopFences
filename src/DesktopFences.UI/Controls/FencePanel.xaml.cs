@@ -896,7 +896,8 @@ public partial class FencePanel : UserControl, ISelectionContainer
             return;
 
         // Keep an existing multi-selection if right-clicking one of its items; otherwise
-        // select just this item. (Shell menu still operates on the single right-clicked file.)
+        // select just this item. The shell menu is built from the whole selection, so
+        // delete/open/send-to operate on all selected files (Explorer semantics).
         SelectionCoordinator?.NotifyActivated(this);
         if (!item.IsSelected)
         {
@@ -907,9 +908,15 @@ public partial class FencePanel : UserControl, ISelectionContainer
         var hostWindow = Window.GetWindow(this);
         if (hostWindow is null) return; // 控件已脱离视觉树（fence 正在关闭）
 
+        // 被右键的文件放首位：COM 构建失败时降级为该单文件菜单
+        var selected = ViewModel?.Files.Where(f => f.IsSelected).Select(f => f.FilePath).ToArray();
+        string[] paths = selected is { Length: > 1 }
+            ? [item.FilePath, .. selected.Where(p => !string.Equals(p, item.FilePath, StringComparison.OrdinalIgnoreCase))]
+            : [item.FilePath];
+
         var screenPoint = element.PointToScreen(e.GetPosition(element));
         var hwnd = new WindowInteropHelper(hostWindow).Handle;
-        ShellContextMenu.Show(hwnd, item.FilePath, (int)screenPoint.X, (int)screenPoint.Y);
+        ShellContextMenu.Show(hwnd, paths, (int)screenPoint.X, (int)screenPoint.Y);
 
         e.Handled = true;
     }

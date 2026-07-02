@@ -23,6 +23,8 @@ internal static class NativeMethods
 
     // --- WinEvent Hook (foreground window change detection) ---
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    // 容器子项增删/重排（桌面 ListView 排序、刷新、改图标尺寸都会触发）
+    public const uint EVENT_OBJECT_REORDER = 0x8004;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
     public delegate void WinEventDelegate(
@@ -172,6 +174,11 @@ internal static class NativeMethods
     public const uint SHGFI_ADDOVERLAYS = 0x000000020;
     public const uint SHGFI_OVERLAYINDEX = 0x000000040;
     public const uint SHGFI_SYSICONINDEX = 0x000004000;
+    public const uint SHGFI_TYPENAME = 0x000000400;
+
+    // Explorer 同款自然排序（"文件2" < "文件10"），桌面按名称排序必须用它而非 Ordinal
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+    public static extern int StrCmpLogicalW(string psz1, string psz2);
     public const uint FILE_ATTRIBUTE_NORMAL = 0x00000080;
 
     // 图标尺寸

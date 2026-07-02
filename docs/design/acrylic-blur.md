@@ -56,7 +56,7 @@ ABGR 32 位(注意不是 ARGB):
 | `FenceBlurEnabled` | DWM 动作 | DropShadow Opacity |
 |---|---|---|
 | `false` | `ACCENT_DISABLED` — 关闭 blur | 0(关闭) |
-| `true` | `ACCENT_ENABLE_BLURBEHIND` + `AccentFlags=0` + `GradientColor=0x00000000` | 0.45(沿用 Phase 10 公式),DropShadow 半径固定 26 px |
+| `true` | `ACCENT_ENABLE_BLURBEHIND` + `AccentFlags=0` + `GradientColor=0x00000000` | 0.45(沿用 Phase 10 公式);DropShadow: BlurRadius 26 px、ShadowDepth `min(12, 26×0.4)`≈10.4、Direction 270 |
 
 注意:DWM 内部 BlurBehind 模糊核大小**不可由用户控制**(系统约 12-16 像素,比 Acrylic 的 ~30 像素弱),因此底层 API 是二值开关 — 早先 `FenceBlurRadius:int(0..60)` 滑块在 1..60 之间拖动视觉无任何差异,polish 阶段已替换为 `FenceBlurEnabled:bool` + CheckBox。`AppSettings.IJsonOnDeserialized` 自动迁移老 JSON(任意正数 → `true`,0 → `false`)。
 

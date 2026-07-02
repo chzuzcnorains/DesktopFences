@@ -76,6 +76,7 @@ DesktopFences.Core   → 纯 C# 模型、规则引擎、布局持久化（无 UI
 - `SHGetFileInfo` — 文件图标提取
 - `SHChangeNotifyRegister` — 桌面文件变更通知
 - `IContextMenu` COM — Shell 右键菜单
+- `IFolderView2` COM + `SetWinEventHook(EVENT_OBJECT_REORDER)` — 读取/监听隐藏桌面视图的图标尺寸与排序（右键查看/排序/刷新联动 overlay，DesktopViewMonitor）
 - `SetWindowCompositionAttribute(WCA_ACCENT_POLICY)` — Fence 窗口 DWM Acrylic 背景模糊（Phase 11）
 
 ## 开发规范
@@ -90,5 +91,5 @@ DesktopFences.Core   → 纯 C# 模型、规则引擎、布局持久化（无 UI
 
 ## 当前开发阶段
 
-**Phase 0-13 + Phase 11 Polish + Phase 12 Polish 全部完成（71 个单元测试通过）。** 
+**Phase 0-14 + Phase 11/12/13 Polish 全部完成（93 个单元测试通过）。** 
 

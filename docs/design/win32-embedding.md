@@ -47,7 +47,7 @@
 ```
 BOTTOM ──(Win+D 检测)──→ 延迟 300ms ──→ TOPMOST
 TOPMOST ──(EVENT_SYSTEM_FOREGROUND: 用户激活其他窗口)──→ BOTTOM
-TOPMOST ──(任意 SetAllBottom：Win+D restore / ExitPeek / 前台切到真实窗口，即时 SendToBottom 可能因桌面/iconic 前台 no-op)──→ 延迟 200ms 防抖重沉 ──→ BOTTOM
+TOPMOST ──(任意 SetAllBottom：Win+D restore / ExitPeek / 前台切到真实窗口，即时 SendToBottom 可能因桌面/iconic 前台 no-op)──→ 延迟 200ms 防抖重沉 ──→ BOTTOM ──→ 50ms 快速复检（IsAnyFenceSunkBehindDesktop 实测遮挡，沉了则 hoist 自愈；桌面前台且未沉时也走同一复检兜底）
 （用户主动新建 Fence 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
 （RegisterWindow / EnsureVisibleAboveDesktop 且当前桌面/任务栏前台）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM
 （前台变成桌面 / 5 秒定时器，且 IsAnyFenceSunkBehindDesktop 实测 fence 真被压到壁纸下）──→ TOPMOST ──(前台切到普通窗口)──→ BOTTOM

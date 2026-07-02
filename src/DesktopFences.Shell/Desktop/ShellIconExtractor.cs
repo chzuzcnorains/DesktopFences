@@ -30,8 +30,16 @@ public sealed class ShellIconExtractor
     /// For non-image files, icons are cached by extension (e.g., ".txt" shares one icon).
     /// </summary>
     public ImageSource? GetIcon(string filePath, bool large = true)
+        => GetIcon(filePath, large ? LargeIconPixelSize : SmallIconPixelSize);
+
+    /// <summary>
+    /// Get the icon at a specific physical-pixel size (cached per size bucket).
+    /// 覆盖层跟随桌面「查看」尺寸时按 iconSize*2 请求（预留 200% DPI 余量，
+    /// WPF 只降采样不放大，任何缩放比下都清晰）。
+    /// </summary>
+    public ImageSource? GetIcon(string filePath, int pixelSize)
     {
-        var key = GetCacheKey(filePath);
+        var key = $"{GetCacheKey(filePath)}@{pixelSize}";
 
         if (_cache.TryGetValue(key, out var cached))
         {
@@ -39,7 +47,7 @@ public sealed class ShellIconExtractor
             return cached;
         }
 
-        var icon = ExtractIcon(filePath, large);
+        var icon = ExtractIcon(filePath, pixelSize);
         if (icon is null) return null;
 
         icon.Freeze();
@@ -50,11 +58,31 @@ public sealed class ShellIconExtractor
     }
 
     /// <summary>
+    /// Drop every cached size bucket for this file so the next GetIcon re-extracts.
+    /// 桌面「刷新」时用：图标资源（如 .lnk 目标换图）可能已变。
+    /// </summary>
+    public void Invalidate(string filePath)
+    {
+        var baseKey = GetCacheKey(filePath);
+        var prefix = baseKey + "@";
+        foreach (var key in _cache.Keys)
+        {
+            if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            _cache.TryRemove(key, out _);
+            lock (_lruLock)
+            {
+                _lruOrder.Remove(key);
+            }
+        }
+    }
+
+    /// <summary>
     /// Asynchronously extract icon (offloads SHGetFileInfo to thread pool).
     /// </summary>
     public Task<ImageSource?> GetIconAsync(string filePath, bool large = true)
     {
-        var key = GetCacheKey(filePath);
+        var key = $"{GetCacheKey(filePath)}@{(large ? LargeIconPixelSize : SmallIconPixelSize)}";
         if (_cache.TryGetValue(key, out var cached))
         {
             TouchLru(key);
@@ -85,19 +113,19 @@ public sealed class ShellIconExtractor
     private const int LargeIconPixelSize = 96;
     private const int SmallIconPixelSize = 32;
 
-    private static ImageSource? ExtractIcon(string filePath, bool large)
+    private static ImageSource? ExtractIcon(string filePath, int pixelSize)
     {
         // Modern path: IShellItemImageFactory::GetImage — same code Explorer uses.
         // The shell decides which icon resource to pick and scales it for us, which
         // avoids the "padded jumbo" problem that plagues SHGetImageList(SHIL_JUMBO).
-        var icon = ExtractViaShellItemImageFactory(filePath, large);
+        var icon = ExtractViaShellItemImageFactory(filePath, pixelSize);
         if (icon is not null) return icon;
 
-        // Fallback: legacy SHGetFileInfo + HICON.
-        return ExtractIconViaShGetFileInfo(filePath, large);
+        // Fallback: legacy SHGetFileInfo + HICON (only two stock sizes available).
+        return ExtractIconViaShGetFileInfo(filePath, large: pixelSize > SmallIconPixelSize);
     }
 
-    private static ImageSource? ExtractViaShellItemImageFactory(string filePath, bool large)
+    private static ImageSource? ExtractViaShellItemImageFactory(string filePath, int pixelSize)
     {
         // SHCreateItemFromParsingName needs a real path. For non-existent paths the
         // legacy fallback (SHGetFileInfo + SHGFI_USEFILEATTRIBUTES) handles by-extension
@@ -115,8 +143,7 @@ public sealed class ShellIconExtractor
             if (itemObj is not NativeMethods.IShellItemImageFactory factory)
                 return null;
 
-            int px = large ? LargeIconPixelSize : SmallIconPixelSize;
-            var size = new NativeMethods.SIZE(px, px);
+            var size = new NativeMethods.SIZE(pixelSize, pixelSize);
             // IconOnly: never substitute a thumbnail (we cache by extension, so
             // per-file thumbnails would all collide on one cache key anyway).
             // BiggerSizeOk: let shell return its native resolution if larger; we'll

@@ -61,18 +61,25 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
     /// </summary>
     public Func<string, bool>? IsDesktopFile { get; set; }
 
-    // Auto-position grid settings (match Windows native desktop icon size/spacing)
-    private const double GridCellWidth = 90;
-    private const double GridCellHeight = 90;
+    // 图标尺寸跟随桌面右键「查看」菜单（大 96 / 中 48 / 小 32，shell 逻辑尺寸即 DIP）。
+    // 其余度量全部由 _iconSize 推导，公式在 48 时精确还原旧常量（90/86/54/36）。
+    private double _iconSize = 48;
+
+    // 网格槽位尺寸（图标间距，与 Windows 原生一致）
+    private double GridCellWidth => CellWidth + 4;
+    private double GridCellHeight => CellHeight;
     private const double GridMarginLeft = 10;
     private const double GridMarginTop = 10;
 
-    // Cell 内部布局：icon 区固定 54 高、文字区固定 36 高，总和 = CellHeight
+    // Cell 内部布局：icon 区（IconRowHeight）+ 文字区（TextRowHeight）两个固定槽位，
     // 让 icon / 文字各自占据固定槽位，保证不同 cell 的 icon、文字水平/垂直中心一致
-    private const double CellWidth = 86;
-    private const double CellHeight = 90;
-    private const double IconRowHeight = 54;
+    private double CellWidth => _iconSize + 38;
+    private double CellHeight => IconRowHeight + TextRowHeight;
+    private double IconRowHeight => _iconSize + 6;
     private const double TextRowHeight = 36;
+
+    // 提取像素 = 2×DIP（预留 200% DPI 余量，WPF 只降采样保证清晰）
+    private int IconPixelSize => (int)Math.Round(_iconSize * 2);
 
     // AllowsTransparency=True 的层叠窗口下，Windows OS 用每像素 alpha 决定 click 走向：
     // alpha=0 的像素直接被判为 click-through，根本不会送到 WPF 的命中测试。
@@ -252,6 +259,183 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
         return _iconElements.ContainsKey(filePath);
     }
 
+    // ──────────────── 原生「查看 / 排序方式 / 刷新」联动（DesktopViewMonitor 驱动） ────────────────
+
+    /// <summary>
+    /// 应用桌面「查看」菜单的图标尺寸（大 96 / 中 48 / 小 32）。
+    /// 现有图标原地重建视觉（重取对应分辨率位图、改行高/cell 尺寸），
+    /// 并按原网格槽位映射到新度量下（槽位冲突/越界时补位到下一空槽）。
+    /// </summary>
+    public void SetIconSize(double iconSize)
+    {
+        if (iconSize < 16 || Math.Abs(iconSize - _iconSize) < 0.5)
+            return;
+
+        // 换度量前先记住每个图标的旧槽位（列优先序，保持视觉顺序稳定）
+        double oldCellW = GridCellWidth, oldCellH = GridCellHeight;
+        var slots = _iconElements
+            .Select(kvp => (
+                Path: kvp.Key,
+                Border: kvp.Value,
+                Col: Math.Max(0, (int)Math.Round((Canvas.GetLeft(kvp.Value) - GridMarginLeft) / oldCellW)),
+                Row: Math.Max(0, (int)Math.Round((Canvas.GetTop(kvp.Value) - GridMarginTop) / oldCellH))))
+            .OrderBy(t => t.Col).ThenBy(t => t.Row)
+            .ToList();
+
+        _iconSize = iconSize;
+
+        int maxCols = Math.Max(1, (int)((Width - GridMarginLeft) / GridCellWidth));
+        int maxRows = Math.Max(1, (int)((Height - GridMarginTop) / GridCellHeight));
+        var used = new HashSet<(int Col, int Row)>();
+
+        foreach (var (path, border, col, row) in slots)
+        {
+            ApplyMetricsToElement(border, path);
+
+            // 原槽位优先；越界钳制、冲突（放大后行列数变少）则补位到下一空槽
+            var slot = (Col: Math.Min(col, maxCols - 1), Row: Math.Min(row, maxRows - 1));
+            if (!used.Add(slot))
+            {
+                slot = FindNextFreeSlot(used, maxCols, maxRows);
+                used.Add(slot);
+            }
+            Canvas.SetLeft(border, GridMarginLeft + slot.Col * GridCellWidth);
+            Canvas.SetTop(border, GridMarginTop + slot.Row * GridCellHeight);
+        }
+    }
+
+    /// <summary>
+    /// 应用桌面「排序方式」菜单：按键值排序后从 (0,0) 起列优先紧凑重排。
+    /// Explorer 语义：文件夹分组在前，名称用 StrCmpLogicalW 自然排序；
+    /// 降序时整体取反（分组也翻转，与 Explorer 一致）。
+    /// </summary>
+    public void SortIcons(DesktopSortKey key, bool ascending)
+    {
+        if (key == DesktopSortKey.Unknown || _iconElements.Count == 0)
+            return;
+
+        // 预计算排序键，避免比较回调里反复走文件系统/Shell
+        var entries = _iconElements.Keys
+            .Select(path =>
+            {
+                bool isDir = Directory.Exists(path);
+                return (
+                    Path: path,
+                    IsDir: isDir,
+                    Display: GetDisplayName(path),
+                    Size: key == DesktopSortKey.Size && !isDir ? GetFileSizeSafe(path) : 0L,
+                    Date: key == DesktopSortKey.DateModified ? GetLastWriteSafe(path) : default,
+                    TypeName: key == DesktopSortKey.ItemType
+                        ? ShellFileOperations.GetFileTypeName(path)
+                        : string.Empty);
+            })
+            .ToList();
+
+        int sign = ascending ? 1 : -1;
+        entries.Sort((a, b) =>
+        {
+            if (a.IsDir != b.IsDir)
+                return sign * (a.IsDir ? -1 : 1);
+
+            int c = key switch
+            {
+                DesktopSortKey.Size => a.Size.CompareTo(b.Size),
+                DesktopSortKey.DateModified => a.Date.CompareTo(b.Date),
+                DesktopSortKey.ItemType => string.Compare(a.TypeName, b.TypeName,
+                    StringComparison.CurrentCultureIgnoreCase),
+                _ => 0,
+            };
+            if (c == 0) // 名称主键 / 其余键并列决胜
+                c = NativeMethods.StrCmpLogicalW(a.Display, b.Display);
+            return sign * c;
+        });
+
+        ReflowSequential(entries.Select(e => e.Path));
+    }
+
+    /// <summary>
+    /// 应用桌面「刷新」：清除已删文件、失效图标缓存并重取位图（图标资源可能已变）。
+    /// 新增文件由 App 侧同步触发的 DesktopFileMonitor.RescanNow 补进来。
+    /// </summary>
+    public void RefreshIcons()
+    {
+        foreach (var (path, border) in _iconElements.ToList())
+        {
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                RemoveIcon(path);
+                FileDeleted?.Invoke(path);
+                continue;
+            }
+            _iconExtractor.Invalidate(path);
+            ApplyMetricsToElement(border, path);
+        }
+    }
+
+    /// <summary>按当前度量重建一个图标元素的视觉（cell/行高/位图尺寸与分辨率）。</summary>
+    private void ApplyMetricsToElement(Border border, string filePath)
+    {
+        border.Width = CellWidth;
+        border.Height = CellHeight;
+        if (border.Child is not Grid grid || grid.RowDefinitions.Count < 2)
+            return;
+
+        grid.RowDefinitions[0].Height = new GridLength(IconRowHeight);
+        grid.RowDefinitions[1].Height = new GridLength(TextRowHeight);
+        foreach (var child in grid.Children)
+        {
+            if (child is Image image)
+            {
+                image.Width = _iconSize;
+                image.Height = _iconSize;
+                var icon = _iconExtractor.GetIcon(filePath, IconPixelSize);
+                if (icon is not null)
+                    image.Source = icon;
+            }
+        }
+    }
+
+    /// <summary>把给定顺序的图标从 (0,0) 起列优先（自上而下、自左而右）紧凑排入网格。</summary>
+    private void ReflowSequential(IEnumerable<string> orderedPaths)
+    {
+        int maxRows = Math.Max(1, (int)((Height - GridMarginTop) / GridCellHeight));
+        int col = 0, row = 0;
+        foreach (var path in orderedPaths)
+        {
+            if (!_iconElements.TryGetValue(path, out var border))
+                continue;
+            Canvas.SetLeft(border, GridMarginLeft + col * GridCellWidth);
+            Canvas.SetTop(border, GridMarginTop + row * GridCellHeight);
+            row++;
+            if (row >= maxRows)
+            {
+                row = 0;
+                col++;
+            }
+        }
+    }
+
+    private static (int Col, int Row) FindNextFreeSlot(HashSet<(int Col, int Row)> used, int maxCols, int maxRows)
+    {
+        for (int col = 0; col < maxCols; col++)
+            for (int row = 0; row < maxRows; row++)
+                if (!used.Contains((col, row)))
+                    return (col, row);
+        return (0, 0); // 网格全满（不应发生）：退化为原点堆叠
+    }
+
+    private static long GetFileSizeSafe(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch { return 0L; }
+    }
+
+    private static DateTime GetLastWriteSafe(string path)
+    {
+        try { return File.GetLastWriteTime(path); } // 对目录同样有效
+        catch { return DateTime.MinValue; }
+    }
+
     // ───────────────────────── In-app drop target (fence → overlay) ─────────────────────────
     // The overlay is normally NOT an OLE drop target: its empty area is alpha=0 (click-through),
     // so a file dragged out of a fence would fall through to the real desktop (SysListView32),
@@ -317,24 +501,27 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
         e.Effects = anyAdded ? DragDropEffects.Move : DragDropEffects.None;
     }
 
+    /// <summary>与 Explorer 一致的显示名：默认隐藏 .lnk 扩展名（排序与标签共用）。</summary>
+    private static string GetDisplayName(string filePath)
+    {
+        var name = Path.GetFileName(filePath);
+        if (name.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+            return name.Substring(0, name.Length - 4);
+        return name;
+    }
+
     private Border CreateIconElement(string filePath)
     {
-        var icon = _iconExtractor.GetIcon(filePath);
-        var displayName = Path.GetFileName(filePath);
-
-        // Hide .lnk extension by default
-        if (displayName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
-        {
-            displayName = displayName.Substring(0, displayName.Length - 4);
-        }
+        var icon = _iconExtractor.GetIcon(filePath, IconPixelSize);
+        var displayName = GetDisplayName(filePath);
 
         // 把 cell 拆成 icon 区（IconRowHeight）+ 文字区（TextRowHeight）两个固定槽位，
         // 让 icon 与文字的位置完全不受彼此尺寸影响，保证同行/同列水平/垂直中心一致。
         var image = new Image
         {
             Source = icon,
-            Width = 48,
-            Height = 48,
+            Width = _iconSize,
+            Height = _iconSize,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Stretch = Stretch.Uniform,
@@ -617,7 +804,8 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
             return;
 
         // Keep an existing multi-selection if right-clicking one of its icons; otherwise
-        // select just this icon. (Context menu still operates on the single right-clicked file.)
+        // select just this icon. The shell menu is built from the whole selection, so
+        // delete/open/send-to operate on all selected files (Explorer semantics).
         if (!_selectedPaths.Contains(filePath))
         {
             SelectionCoordinator?.NotifyActivated(this); // global single selection: clear fences
@@ -625,16 +813,25 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
             SetSelected(filePath, true);
         }
 
+        // 弹菜单前取快照；被右键的文件放首位（COM 构建失败时降级为该单文件菜单）
+        string[] paths = _selectedPaths.Count > 1
+            ? [filePath, .. _selectedPaths.Where(p => !string.Equals(p, filePath, StringComparison.OrdinalIgnoreCase))]
+            : [filePath];
+
         // Show Shell context menu (same as FencePanel)
         var screenPoint = border.PointToScreen(e.GetPosition(border));
         var hwnd = new WindowInteropHelper(this).Handle;
-        ShellContextMenu.Show(hwnd, filePath, (int)screenPoint.X, (int)screenPoint.Y);
+        ShellContextMenu.Show(hwnd, paths, (int)screenPoint.X, (int)screenPoint.Y);
 
-        // Check if file was deleted via context menu
-        if (!File.Exists(filePath) && !Directory.Exists(filePath))
+        // Remove any file the menu deleted right away (RemoveIcon also drops it from
+        // _selectedPaths); the desktop monitor is only the eventual-consistency backstop.
+        foreach (var path in paths)
         {
-            RemoveIcon(filePath);
-            FileDeleted?.Invoke(filePath);
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                RemoveIcon(path);
+                FileDeleted?.Invoke(path);
+            }
         }
 
         e.Handled = true;

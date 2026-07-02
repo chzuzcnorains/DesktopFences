@@ -20,7 +20,8 @@
       "Read(//c/Users/Norains/AppData/Local/Temp/**)",
       "Skill(code-review)",
       "Skill(code-review:*)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git checkout *)"
     ]
   }
 }
