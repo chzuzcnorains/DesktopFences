@@ -37,12 +37,15 @@ public partial class App : Application
     private System.Timers.Timer? _autoSaveTimer;
     private System.Timers.Timer? _autoOrganizeTimer;
     private System.Timers.Timer? _fileExistenceTimer;
+    private DateTime _lastTrimUtc = DateTime.MinValue; // 工作集裁剪冷却基准
     private bool _isShuttingDown;
     private bool _loadFailed; // 启动加载异常 → 禁止保存，防止用空状态覆盖磁盘上的好数据
     private UI.Controls.SnapGuideOverlay? _snapGuideOverlay;
     private DesktopIconManager? _desktopIconManager;
     private DesktopIconOverlay? _desktopOverlay;
     private DesktopMarqueeManager? _marqueeManager;
+    // 监听隐藏的原生桌面视图（查看尺寸/排序/刷新），联动到覆盖层
+    private DesktopViewMonitor? _viewMonitor;
     // Enforces a single mutually-exclusive selection across all fences + the desktop overlay.
     private readonly DesktopSelectionCoordinator _selectionCoordinator = new();
     private SettingsWindow? _settingsWindow;
@@ -111,8 +114,11 @@ public partial class App : Application
         SetupTrayIcon();
 
         // Create the shared snap guide overlay (transparent, click-through window)
+        // Show() 只为创建 HWND（触发 OnSourceInitialized 应用 WS_EX_TRANSPARENT 等
+        // 样式），随即 Hide 缩回 1×1 —— 拖拽时 ShowLines 才撑满虚拟屏。
         _snapGuideOverlay = new UI.Controls.SnapGuideOverlay();
         _snapGuideOverlay.Show();
+        _snapGuideOverlay.Hide();
 
         try
         {
@@ -136,6 +142,10 @@ public partial class App : Application
 
         if (!_loadFailed)
             StartAutoSave();
+
+        // 启动稳定后（图标提取风暴/JIT/首帧渲染都已结束）做一次工作集裁剪，
+        // 把启动期的一次性分配换出，压低任务管理器「内存」列的稳态读数。
+        ScheduleWorkingSetTrim(60_000, TimeSpan.Zero);
     }
 
     /// <summary>
@@ -207,6 +217,9 @@ public partial class App : Application
 
     private async Task OrganizeDesktopOnceAsync()
     {
+        // 退出途中不再整理：定时器可能在窗口拆除途中触发，避免对正在 Close 的 fence
+        // 做 AddFile/RemoveIcon。
+        if (_isShuttingDown) return;
         try
         {
             var allFiles = GetAllDesktopEntries();
@@ -239,7 +252,7 @@ public partial class App : Application
                     if (added != null)
                     {
                         if (_iconExtractor != null)
-                            added.Icon = _iconExtractor.GetIcon(filePath);
+                            added.Icon = _iconExtractor.GetIcon(filePath, UI.Services.IconMetrics.TileIconRequestPx);
                         affected.Add(targetTab);
                     }
                 }
@@ -1509,6 +1522,47 @@ public partial class App : Application
         // Sync overlay visibility
         if (anyVisible) _desktopOverlay?.Hide();
         else _desktopOverlay?.Show();
+
+        // 本次操作 = 全部隐藏 → 2s 后复核仍全隐藏才裁剪工作集
+        //（防止用户马上切回；1 分钟冷却防连续开关刷裁剪）
+        if (anyVisible)
+            ScheduleWorkingSetTrim(2_000, TimeSpan.FromMinutes(1),
+                () => _fenceWindows.All(f => !f.IsVisible));
+    }
+
+    // ── Working-Set Trim（内存优化：启动稳定/全部隐藏/输入空闲时换出工作集）──
+
+    /// <summary>带冷却的工作集裁剪；实际动作丢到线程池，不阻塞调用线程。</summary>
+    private void TrimWorkingSetIfDue(TimeSpan cooldown)
+    {
+        if (_isShuttingDown) return;
+        var now = DateTime.UtcNow;
+        if (now - _lastTrimUtc < cooldown) return;
+        _lastTrimUtc = now;
+        Task.Run(WorkingSetTrimmer.Trim);
+    }
+
+    /// <summary>
+    /// delayMs 后做一次性裁剪。condition（若给出）在 UI 线程复核——
+    /// 用于"全部隐藏 2s 后仍然全隐藏"这类要读窗口状态的判定。
+    /// </summary>
+    private void ScheduleWorkingSetTrim(int delayMs, TimeSpan cooldown, Func<bool>? condition = null)
+    {
+        var timer = new System.Timers.Timer(delayMs) { AutoReset = false };
+        timer.Elapsed += (_, _) =>
+        {
+            timer.Dispose();
+            if (condition is null)
+            {
+                TrimWorkingSetIfDue(cooldown);
+                return;
+            }
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (condition()) TrimWorkingSetIfDue(cooldown);
+            });
+        };
+        timer.Start();
     }
 
     // ── Folder Portal ─────────────────────────────────────────
@@ -1550,7 +1604,7 @@ public partial class App : Application
                 if (added is not null)
                 {
                     if (added.Icon is null && _iconExtractor is not null)
-                        added.Icon = _iconExtractor.GetIcon(path);
+                        added.Icon = _iconExtractor.GetIcon(path, UI.Services.IconMetrics.TileIconRequestPx);
                     changed = true;
                 }
             }
@@ -1596,7 +1650,14 @@ public partial class App : Application
 
         // Periodic check: remove fence items whose files no longer exist on disk
         _fileExistenceTimer = new System.Timers.Timer(10000) { AutoReset = true };
-        _fileExistenceTimer.Elapsed += (_, _) => Dispatcher.InvokeAsync(RemoveDeletedFilesFromFences);
+        _fileExistenceTimer.Elapsed += (_, _) =>
+        {
+            Dispatcher.InvokeAsync(RemoveDeletedFilesFromFences);
+            // 借用本 10s 定时器做空闲判定（不新增轮询）：
+            // 输入空闲 ≥5 分钟才裁剪工作集，30 分钟冷却。
+            if (WorkingSetTrimmer.GetInputIdleTime() >= TimeSpan.FromMinutes(5))
+                TrimWorkingSetIfDue(TimeSpan.FromMinutes(30));
+        };
         _fileExistenceTimer.Start();
     }
 
@@ -1633,7 +1694,7 @@ public partial class App : Application
                 if (added != null)
                 {
                     if (_iconExtractor != null && added.Icon == null)
-                        added.Icon = _iconExtractor.GetIcon(filePath);
+                        added.Icon = _iconExtractor.GetIcon(filePath, UI.Services.IconMetrics.TileIconRequestPx);
                     affected.Add(targetTab);
                 }
 
@@ -1857,7 +1918,31 @@ public partial class App : Application
         _desktopOverlay = new DesktopIconOverlay(_embedManager, _iconExtractor);
         _desktopOverlay.SelectionCoordinator = _selectionCoordinator; // before Show() → registered in OnLoaded
         _desktopOverlay.IsDesktopFile = IsDesktopFile; // drop handler ignores non-desktop (portal) sources
+
+        // 桌面右键「查看 / 排序方式 / 刷新」联动：读取隐藏的原生桌面视图（IFolderView2）
+        // 的真实状态。先应用启动前用户已设置的图标尺寸，再铺图标，最后按当前排序重排。
+        _viewMonitor = new DesktopViewMonitor(_desktopIconManager?.GetListViewHandle() ?? IntPtr.Zero);
+        if (_viewMonitor.TryGetIconSize(out int iconSize))
+            _desktopOverlay.SetIconSize(iconSize);
+
         _desktopOverlay.SetIcons(items);
+
+        if (_viewMonitor.TryGetSort(out var sortKey, out bool ascending))
+            _desktopOverlay.SortIcons(sortKey, ascending);
+
+        // 事件已在 UI 线程触发（钩子/定时器装在 UI 线程），Dispatcher 仅防御性兜底
+        _viewMonitor.IconSizeChanged += size =>
+            Dispatcher.InvokeAsync(() => _desktopOverlay?.SetIconSize(size));
+        _viewMonitor.SortChanged += (key, asc) =>
+            Dispatcher.InvokeAsync(() => _desktopOverlay?.SortIcons(key, asc));
+        _viewMonitor.DesktopRefreshed += () =>
+            Dispatcher.InvokeAsync(() =>
+            {
+                _desktopOverlay?.RefreshIcons();   // 已删文件清除 + 图标位图重取
+                _fileMonitor?.RescanNow();         // 新增文件立即补进（不等 30 秒兜底）
+            });
+        _viewMonitor.Start();
+
         _desktopOverlay.Show();
 
         // Native-style rubber-band (marquee) selection on the desktop background.
@@ -1985,6 +2070,8 @@ public partial class App : Application
         _snapGuideOverlay = null;
         _marqueeManager?.Dispose();
         _marqueeManager = null;
+        _viewMonitor?.Dispose();
+        _viewMonitor = null;
         _desktopOverlay?.Close();
         _desktopOverlay = null;
         _desktopIconManager?.ShowIcons();
@@ -2001,6 +2088,8 @@ public partial class App : Application
         _quickHideManager?.Dispose();
         _autoSaveTimer?.Stop();
         _autoSaveTimer?.Dispose();
+        _autoOrganizeTimer?.Stop();
+        _autoOrganizeTimer?.Dispose();
         _fileExistenceTimer?.Stop();
         _fileExistenceTimer?.Dispose();
         _trayIcon?.Dispose();

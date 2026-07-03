@@ -49,11 +49,8 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"
                                    Margin="0,0,0,5"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Effect>
-                                <DropShadowEffect BlurRadius="3" ShadowDepth="1" Opacity="0.45" Color="Black"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                                   IsHitTestVisible="False"
+                                   Effect="{StaticResource TileBadgeShadow}"/>
                     </Grid>
                     <TextBlock Grid.Row="1"
                                Text="{Binding DisplayName}"
@@ -114,11 +111,8 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"
                                    Margin="0,0,0,5"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Effect>
-                                <DropShadowEffect BlurRadius="2" ShadowDepth="0.6" Opacity="0.4" Color="Black"/>
-                            </TextBlock.Effect>
-                        </TextBlock>
+                                   IsHitTestVisible="False"
+                                   Effect="{StaticResource SysBadgeShadow}"/>
                     </Grid>
                     <TextBlock Grid.Row="1"
                                Text="{Binding DisplayName}"

@@ -49,6 +49,28 @@ public static class ShellFileOperations
     }
 
     /// <summary>
+    /// 获取 shell 的本地化文件类型名（如「应用程序」「文本文档」），
+    /// 与 Explorer「排序方式→项目类型」使用同一口径。失败返回空串。
+    /// </summary>
+    public static string GetFileTypeName(string filePath)
+    {
+        var flags = NativeMethods.SHGFI_TYPENAME;
+        // 不存在的路径按扩展名推断（与图标提取的降级路径一致）
+        if (!File.Exists(filePath) && !Directory.Exists(filePath))
+            flags |= NativeMethods.SHGFI_USEFILEATTRIBUTES;
+
+        var shfi = new NativeMethods.SHFILEINFO();
+        var result = NativeMethods.SHGetFileInfo(
+            filePath,
+            NativeMethods.FILE_ATTRIBUTE_NORMAL,
+            ref shfi,
+            (uint)Marshal.SizeOf<NativeMethods.SHFILEINFO>(),
+            flags);
+
+        return result == IntPtr.Zero ? string.Empty : shfi.szTypeName ?? string.Empty;
+    }
+
+    /// <summary>
     /// Rename a file (same directory, new name).
     /// </summary>
     public static bool RenameFile(string filePath, string newName)

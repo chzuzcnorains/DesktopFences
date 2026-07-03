@@ -44,32 +44,45 @@ Topmost=False  // z-order 由 DesktopEmbedManager 统一管理
 
 ## 3. 图标尺寸与布局
 
-### 3.1 Windows 原生尺寸对照
+### 3.1 尺寸跟随桌面「查看」菜单（动态度量）
 
-| 项目 | 值 | 说明 |
-|------|-----|------|
-| 图标尺寸 | **48×48** | SHGFI_LARGEICON 标准大图标 |
-| 网格单元 | **90×90** | 图标之间的间距与 Windows 原生一致 |
-| 字体大小 | **12** | 图标下方文件名 |
-| 边距 | **10** | 桌面边缘起始边距 |
-
-### 3.2 覆盖层布局常量
+图标尺寸**不再是固定常量**，而是跟随桌面右键「查看」菜单（大图标 96 / 中等图标 48 / 小图标 32，
+shell 逻辑尺寸可直接当 DIP 用），由 `DesktopViewMonitor` 读取/监听（见 §12）。
+其余布局度量全部由 `_iconSize` 推导，公式在 48 时**精确还原**旧常量（90/86/54/36）：
 
 ```csharp
-private const double GridCellWidth = 90;    // 图标网格宽度
-private const double GridCellHeight = 90;   // 图标网格高度
-private const double GridMarginLeft = 10;   // 左边距
-private const double GridMarginTop = 10;    // 上边距
+private double _iconSize = 48;                       // 查看菜单：96 / 48 / 32
+private double IconRowHeight => _iconSize + 6;       // icon 槽位行高
+private const double TextRowHeight = 36;             // 文字槽位行高（各尺寸下恒定）
+private double CellHeight => IconRowHeight + TextRowHeight;
+private double CellWidth  => _iconSize + 38;
+private double GridCellWidth  => CellWidth + 4;      // 网格槽位（图标间距）
+private double GridCellHeight => CellHeight;
+private const double GridMarginLeft = 10;
+private const double GridMarginTop = 10;
+private int IconPixelSize => (int)Math.Round(_iconSize * 2); // 提取像素=2×DIP，预留 200% DPI
 ```
 
-### 3.3 图标容器结构
+| _iconSize | 网格槽位 | Cell | icon 行高 | 提取像素 |
+|-----------|---------|------|----------|----------|
+| 32（小）  | 74×74   | 70×74 | 38 | 64 |
+| 48（中）  | 90×90   | 86×90 | 54 | 96 |
+| 96（大）  | 138×138 | 134×138 | 102 | 192 |
+
+字体大小恒为 12（与 Windows 原生一致：换图标尺寸不改标签字号）。
+
+### 3.2 图标容器结构
 
 ```
-Border (86×90, CornerRadius=4)
-└── StackPanel (Margin=4)
-    ├── Image (48×48)
-    └── TextBlock (FontSize=12, MaxHeight=36, Wrap, DropShadow)
+Border (CellWidth×CellHeight, CornerRadius=4)
+└── Grid（两行固定槽位）
+    ├── Row0 (IconRowHeight): Image (_iconSize×_iconSize)
+    └── Row1 (TextRowHeight): TextBlock (FontSize=12, Wrap, DropShadow)
 ```
+
+`SetIconSize()` 切换尺寸时对现有元素**原地重建视觉**（改 Border/RowDefinition/Image 尺寸 +
+按 `IconPixelSize` 重取位图），并把每个图标的旧网格槽位 (col,row) 映射到新度量下
+（越界钳制、冲突补位到下一空槽），保持视觉顺序稳定。
 
 ---
 
@@ -390,13 +403,14 @@ OnExit
 | **框选** | 拖拽出选框，框内图标实时高亮进入 `_selectedPaths` |
 | **整组拖入 fence** | 按住选中图标之一拖拽→直接 OLE 拖放，`DataObject` 携带**全部**选中路径 + `InternalDragFormats.Marker`；fence `OnDrop` 已按 `string[]` 处理，无需改动；返回 `Move` 时逐个 `RemoveIcon` |
 | **Delete 批量删除** | 逐个 `ShellFileOperations.DeleteToRecycleBin` → `RemoveIcon` |
+| **右键选中图标之一** | 保留多选，Shell 菜单按**整个选区**构建（`ShellContextMenu.Show` 多文件重载，`IShellItemArray`，bug 43）——删除/打开/发送到作用于全部选中项；菜单返回后遍历选区做存在性检查，已删文件即时 `RemoveIcon` + `FileDeleted`（不等 FSW/30 秒扫描兜底） |
+| **右键未选中图标** | 清空选区、单选该图标，弹单文件菜单（Explorer 语义） |
 | **Ctrl/Shift 单击图标** | toggle 该图标，不清空其余 |
 | **空白单击 / Esc** | 清空选中 |
 
 ### 11.6 已知限制
 
 - 覆盖层仅覆盖**主屏工作区**；副屏空白处拖框不绘制/不选中（沿用覆盖层既有主屏限制，见 [multi-monitor.md](multi-monitor.md)）。
-- 右键命中多选中之一时仍弹**单文件** Shell 菜单（多文件上下文菜单未实现）。
 - Shift 范围选当前等价于「追加单个」，几何范围选为后续增强。
 - 覆盖层被快速隐藏（`Hide()`）期间框选事件直接忽略（`IsVisible` 守卫）。
 
@@ -404,7 +418,107 @@ OnExit
 
 ---
 
-## 12. 历史调整记录
+## 12. 与原生桌面「查看 / 排序方式 / 刷新」联动（DesktopViewMonitor）
+
+### 12.1 原理：隐藏的原生视图是状态源
+
+覆盖层空白区右键弹出的是**原生 SHELLDLL_DefView 菜单**（§11.2 承重墙）。用户点
+「查看→大图标」「排序方式→名称」「刷新」时，命令实际已在被 `ShowWindow(SW_HIDE)`
+隐藏的 SysListView32 上生效——只是不可见。因此无需拦截菜单：**读取隐藏视图的真实
+状态并镜像到覆盖层**即可，Shell 层新增 `DesktopViewMonitor` 负责此事。
+
+### 12.2 状态读取：IFolderView2
+
+Raymond Chen 官方路径。**COM 代理缓存复用**：获取链路只在缓存缺失时走一遍（中间对象
+即取即放），之后每次检查仅 2~3 个轻量跨进程调用（实测约 0.2ms/次）；任一调用失败即
+丢弃缓存、下周期重建——explorer 重启自动恢复：
+
+```
+ShellWindows (CLSID 9BA05972-…) → FindWindowSW(CSIDL_DESKTOP, SWC_DESKTOP)
+  → IServiceProvider.QueryService(SID_STopLevelBrowser) → IShellBrowser
+  → QueryActiveShellView → IFolderView2
+      ├─ GetViewModeAndIconSize → 图标尺寸（96/48/32）
+      └─ GetSortColumnCount / GetSortColumns → 主排序列 PROPERTYKEY + 方向
+```
+
+排序列映射（四项全部落在 FMTID_Storage `B725F130-47EF-101A-A5F1-02608C9EEBAC` 下）：
+
+| 菜单项 | pid | DesktopSortKey |
+|--------|-----|----------------|
+| 名称 | 10 | Name |
+| 大小 | 12 | Size |
+| 项目类型 | 4 | ItemType |
+| 修改日期 | 14 | DateModified |
+
+COM 声明（IShellWindows/IShellBrowser/IFolderView2 组合 vtable + 占位槽）内嵌于
+`DesktopViewMonitor` 私有区（沿用 ShellContextMenu 的就地声明模式）。
+
+### 12.3 变化触发：250ms 快速轮询为主 + EVENT_OBJECT_REORDER 加速
+
+- **250ms `DispatcherTimer` 快速轮询是主通道**——隐藏的 SysListView32 实测**大多不发**
+  REORDER 无障碍事件（窗口不可见时常跳过重排），尺寸/排序变化主要靠轮询发现。
+  COM 代理已缓存（§12.2，约 0.2ms/次），开销可忽略，保证亚半秒响应。
+  轮询与上次快照比对：
+  - 尺寸变了 → `IconSizeChanged(size)`；
+  - 排序变了 → `SortChanged(key, ascending)`（Unknown 列不广播，覆盖层无法复现）。
+- `SetWinEventHook(EVENT_OBJECT_REORDER)`（200ms 去抖）当加速器；且是「刷新」检测的
+  **唯一来源**：REORDER 触发的比对若尺寸/排序均未变 → `DesktopRefreshed`
+  （F5 / 右键刷新 / 桌面文件增删——刷新没有可轮询的状态，轮询看不到它）。
+- 线程模型：`Start()` 必须在 UI 线程调用（OUTOFCONTEXT 回调经安装线程消息循环派发），
+  所有事件天然落在 UI 线程；App 侧仍用 `Dispatcher.InvokeAsync` 防御性兜底。
+
+### 12.4 覆盖层侧响应
+
+| 事件 | 覆盖层行为 |
+|------|-----------|
+| `IconSizeChanged` | `SetIconSize()`：动态度量重算（§3.1）+ 原地重建视觉 + 旧槽位映射 |
+| `SortChanged` | `SortIcons()`：按键排序后从 (0,0) 列优先**紧凑重排**（覆盖层本就自动网格，不镜像原生散布位置） |
+| `DesktopRefreshed` | `RefreshIcons()`：清除已删文件、`ShellIconExtractor.Invalidate` 失效缓存并重取位图；App 同步调 `DesktopFileMonitor.RescanNow()` 立即补进新增文件（不等 30 秒兜底） |
+
+排序实现 Explorer 语义：文件夹分组在前；名称用 `StrCmpLogicalW` 自然排序（"文件2"<"文件10"，
+比较隐藏 .lnk 后的显示名）；「项目类型」用 `SHGetFileInfo(SHGFI_TYPENAME)` 本地化类型名
+（与 Explorer 同口径）；其余键并列时以名称决胜；**降序整体取反**（文件夹分组随之翻转，与
+Explorer 一致）。排序键在 sort 前一次性预计算，避免比较回调反复走文件系统/Shell。
+
+启动时序（App.CreateDesktopOverlay）：先 `TryGetIconSize` 应用启动前用户已设置的尺寸 →
+`SetIcons` 铺图标 → `TryGetSort` 按当前排序重排 → 订阅三事件 → `Start()`。
+
+### 12.5 图标提取配合（ShellIconExtractor）
+
+- 新增 `GetIcon(path, pixelSize)`：按物理像素尺寸提取，缓存 key 追加 `@px` 尺寸桶
+  （同一文件的 32/48/96 位图各自缓存）；旧 `GetIcon(path, bool large)` 委托到 96/32。
+- 新增 `Invalidate(path)`：清掉该文件全部尺寸桶，下次 GetIcon 重新提取（刷新联动用）。
+- 覆盖层按 `iconSize*2` 请求（预留 200% DPI 余量，WPF 只降采样保证清晰）。
+
+### 12.6 已知限制
+
+- 「查看」子菜单的**自动排列图标 / 将图标与网格对齐 / 显示桌面图标**三个开关不联动
+  （覆盖层本就恒定自动网格；「显示桌面图标」被本应用接管）。
+- 覆盖层排序是**紧凑重排**，不含已收纳进 fence 的文件——与原生"全桌面排序后留洞"不同，
+  这是覆盖层只显示未收纳文件的自然结果。
+- 「刷新」检测是启发式（REORDER 且尺寸/排序均未变）：桌面文件增删也会触发一次
+  `DesktopRefreshed`——副作用是良性的（重扫 + 图标缓存失效，等价于提前刷新）。
+
+**涉及文件**：`DesktopViewMonitor.cs`（新增）、`DesktopIconOverlay.xaml.cs`
+（SetIconSize/SortIcons/RefreshIcons + 动态度量）、`ShellIconExtractor.cs`（尺寸桶缓存 +
+Invalidate）、`DesktopFileMonitor.RescanNow`、`ShellFileOperations.GetFileTypeName`、
+`NativeMethods`（EVENT_OBJECT_REORDER/SHGFI_TYPENAME/StrCmpLogicalW）、`App.xaml.cs`（装配）。
+
+---
+
+## 13. 历史调整记录
+
+### 2026-07-02: 右键「查看 / 排序方式 / 刷新」联动覆盖层
+
+**需求**：overlay 图标大小固定 48；桌面右键「查看（大/中/小图标）」「排序方式」「刷新」
+及其子菜单应对 overlay 生效（如选「大图标」则 overlay 图标同步变大）。
+
+**实现**：Shell 层新增 `DesktopViewMonitor`（IFolderView2 读状态（COM 代理缓存）+
+250ms 快速轮询主通道 + EVENT_OBJECT_REORDER 加速/刷新检测），覆盖层布局常量改为随
+`_iconSize` 推导的动态度量，新增 `SetIconSize` / `SortIcons` / `RefreshIcons`
+（详见 §3.1、§12）。同日修正 IShellWindows 晚绑定失效（bug 44）；后续实测隐藏
+ListView 大多不发 REORDER，遂将轮询从 2s 兜底提为 250ms 主通道（代理缓存后
+单次检查约 0.2ms）。
 
 ### 2026-06-25: 桌面框选（Rubber-band 多选）
 

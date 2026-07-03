@@ -119,6 +119,12 @@ public sealed class DesktopFileMonitor : IDisposable
     }
 
     /// <summary>
+    /// 立即执行一次全量扫描（桌面右键「刷新」联动），不等 30 秒兜底定时器。
+    /// 与定时扫描共用同一路径，线程安全。
+    /// </summary>
+    public void RescanNow() => PerformFullScan();
+
+    /// <summary>
     /// Get all current files on the desktop.
     /// </summary>
     public IReadOnlyList<string> GetCurrentFiles()

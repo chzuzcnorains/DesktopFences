@@ -74,6 +74,38 @@ public class AppSettingsTests : IDisposable
         Assert.Equal(0.9, loaded[0].Opacity);
     }
 
+    [Fact]
+    public void CloneForPersist_SnapshotsMutableCollection_IndependentOfOriginal()
+    {
+        var settings = new AppSettings { SnapThreshold = 42 };
+        settings.RecentClosedFences.Add("a");
+        settings.RecentClosedFences.Add("b");
+
+        var snapshot = settings.CloneForPersist();
+
+        // Mutating the original list after the snapshot must not affect the snapshot —
+        // this is what removes the UI-thread-mutation vs. background-serialize race.
+        settings.RecentClosedFences.Add("c");
+        settings.RecentClosedFences.RemoveAt(0);
+
+        Assert.NotSame(settings.RecentClosedFences, snapshot.RecentClosedFences);
+        Assert.Equal(new[] { "a", "b" }, snapshot.RecentClosedFences);
+        Assert.Equal(42, snapshot.SnapThreshold); // scalar fields copied by value
+    }
+
+    [Fact]
+    public async Task SaveAndLoadSettings_PreservesRecentClosedFences()
+    {
+        var settings = new AppSettings();
+        settings.RecentClosedFences.Add("{\"fake\":1}");
+        settings.RecentClosedFences.Add("{\"fake\":2}");
+
+        await _store.SaveSettingsAsync(settings);
+        var loaded = await _store.LoadSettingsAsync();
+
+        Assert.Equal(settings.RecentClosedFences, loaded.RecentClosedFences);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_tempDir, true); }

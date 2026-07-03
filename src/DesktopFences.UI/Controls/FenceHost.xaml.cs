@@ -170,6 +170,13 @@ public FenceHost(DesktopEmbedManager embedManager, FencePanelViewModel viewModel
         var vm = _tabs[index];
         _tabs.RemoveAt(index);
 
+        // Removing a tab BEFORE the active one shifts every later index down by
+        // one — decrement so the same tab stays active. Reachable via tear-off
+        // drag of an inactive tab (DetachTab passes an arbitrary index; the menu
+        // paths always pass _activeTabIndex). See docs/bug/tab_detach_active_index_shift.md.
+        if (index < _activeTabIndex)
+            _activeTabIndex--;
+
         if (_activeTabIndex >= _tabs.Count)
             _activeTabIndex = _tabs.Count - 1;
 

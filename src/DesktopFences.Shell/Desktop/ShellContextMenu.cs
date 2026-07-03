@@ -5,14 +5,81 @@ using DesktopFences.Shell.Interop;
 namespace DesktopFences.Shell.Desktop;
 
 /// <summary>
-/// Shows the native Windows shell context menu for a file.
-/// Uses IContextMenu COM interface via IShellFolder.
+/// Shows the native Windows shell context menu for one or more files.
+/// Single file uses IContextMenu via IShellFolder.GetUIObjectOf; multiple files go through
+/// IShellItemArray.BindToHandler(BHID_SFUIObject) so the selection may span parent folders
+/// (user desktop + public desktop).
 /// </summary>
 public static class ShellContextMenu
 {
     // COM interface GUIDs
     private static readonly Guid IID_IShellFolder = new("000214E6-0000-0000-C000-000000000046");
     private static readonly Guid IID_IContextMenu = new("000214E4-0000-0000-C000-000000000046");
+    private static readonly Guid BHID_SFUIObject = new("3981e225-f559-11d3-8e3a-00c04f6837d5");
+
+    /// <summary>
+    /// Show the shell context menu for a multi-file selection. Menu verbs (delete, open,
+    /// send-to…) operate on the whole set, matching Explorer semantics. Callers should put
+    /// the right-clicked file at index 0 — it is the single-file fallback if COM setup fails.
+    /// </summary>
+    public static void Show(IntPtr hwndOwner, IReadOnlyList<string> filePaths, int screenX, int screenY)
+    {
+        if (filePaths.Count == 0) return;
+        if (filePaths.Count == 1)
+        {
+            Show(hwndOwner, filePaths[0], screenX, screenY);
+            return;
+        }
+
+        var pidls = new List<IntPtr>(filePaths.Count);
+        try
+        {
+            // 单个文件解析失败（已被删除/移动）跳过即可，不中断整批
+            foreach (var path in filePaths)
+            {
+                if (SHParseDisplayName(path, IntPtr.Zero, out var pidl, 0, out _) == 0)
+                    pidls.Add(pidl);
+            }
+            if (pidls.Count == 0) return;
+
+            int hr = SHCreateShellItemArrayFromIDLists((uint)pidls.Count, pidls.ToArray(), out var itemArray);
+            if (hr != 0 || itemArray is null)
+            {
+                Show(hwndOwner, filePaths[0], screenX, screenY);
+                return;
+            }
+
+            try
+            {
+                var bhid = BHID_SFUIObject;
+                var iidCtxMenu = IID_IContextMenu;
+                hr = itemArray.BindToHandler(IntPtr.Zero, ref bhid, ref iidCtxMenu, out var ctxObj);
+                if (hr != 0)
+                {
+                    Show(hwndOwner, filePaths[0], screenX, screenY);
+                    return;
+                }
+
+                try
+                {
+                    TrackAndInvoke(ctxObj, hwndOwner, screenX, screenY);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(ctxObj);
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(itemArray);
+            }
+        }
+        finally
+        {
+            foreach (var pidl in pidls)
+                Marshal.FreeCoTaskMem(pidl);
+        }
+    }
 
     /// <summary>
     /// Show the shell context menu at the given screen coordinates for the specified file.
@@ -51,33 +118,7 @@ public static class ShellContextMenu
 
                     try
                     {
-                        var contextMenu = (IContextMenu)ctxObj;
-                        var hMenu = NativeMethods.CreatePopupMenu();
-
-                        try
-                        {
-                            contextMenu.QueryContextMenu(hMenu, 0, 1, 0x7FFF, 0); // CMF_NORMAL
-
-                            int cmd = NativeMethods.TrackPopupMenuEx(
-                                hMenu,
-                                NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_LEFTALIGN,
-                                screenX, screenY, hwndOwner, IntPtr.Zero);
-
-                            if (cmd > 0)
-                            {
-                                var ci = new CMINVOKECOMMANDINFO
-                                {
-                                    cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
-                                    lpVerb = (IntPtr)(cmd - 1),
-                                    nShow = 1 // SW_SHOWNORMAL
-                                };
-                                contextMenu.InvokeCommand(ref ci);
-                            }
-                        }
-                        finally
-                        {
-                            NativeMethods.DestroyMenu(hMenu);
-                        }
+                        TrackAndInvoke(ctxObj, hwndOwner, screenX, screenY);
                     }
                     finally
                     {
@@ -100,11 +141,62 @@ public static class ShellContextMenu
         }
     }
 
+    /// <summary>
+    /// Shared tail of both code paths: build the popup from an IContextMenu, track it and
+    /// invoke the chosen verb. Caller owns (and must release) <paramref name="ctxObj"/>.
+    /// </summary>
+    private static void TrackAndInvoke(object ctxObj, IntPtr hwndOwner, int screenX, int screenY)
+    {
+        var contextMenu = (IContextMenu)ctxObj;
+        var hMenu = NativeMethods.CreatePopupMenu();
+
+        try
+        {
+            contextMenu.QueryContextMenu(hMenu, 0, 1, 0x7FFF, 0); // CMF_NORMAL
+
+            int cmd = NativeMethods.TrackPopupMenuEx(
+                hMenu,
+                NativeMethods.TPM_RETURNCMD | NativeMethods.TPM_LEFTALIGN,
+                screenX, screenY, hwndOwner, IntPtr.Zero);
+
+            if (cmd > 0)
+            {
+                var ci = new CMINVOKECOMMANDINFO
+                {
+                    cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFO>(),
+                    lpVerb = (IntPtr)(cmd - 1),
+                    nShow = 1 // SW_SHOWNORMAL
+                };
+                contextMenu.InvokeCommand(ref ci);
+            }
+        }
+        finally
+        {
+            NativeMethods.DestroyMenu(hMenu);
+        }
+    }
+
     // ── COM imports ─────────────────────────────────────────
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHParseDisplayName(
         string pszName, IntPtr pbc, out IntPtr ppidl, uint sfgaoIn, out uint psfgaoOut);
+
+    [DllImport("shell32.dll")]
+    private static extern int SHCreateShellItemArrayFromIDLists(
+        uint cidl,
+        [MarshalAs(UnmanagedType.LPArray)] IntPtr[] rgpidl,
+        out IShellItemArray? ppsiItemArray);
+
+    // 仅声明 vtable 首个方法 BindToHandler；后续方法（GetPropertyStore 等）不调用，可省略
+    [ComImport, Guid("b63ea76d-1f85-456f-a19c-48159efa858b")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemArray
+    {
+        [PreserveSig]
+        int BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid,
+            [MarshalAs(UnmanagedType.Interface)] out object ppvOut);
+    }
 
     [DllImport("shell32.dll")]
     private static extern int SHBindToObject(

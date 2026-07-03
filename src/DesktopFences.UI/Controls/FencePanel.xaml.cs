@@ -896,7 +896,8 @@ public partial class FencePanel : UserControl, ISelectionContainer
             return;
 
         // Keep an existing multi-selection if right-clicking one of its items; otherwise
-        // select just this item. (Shell menu still operates on the single right-clicked file.)
+        // select just this item. The shell menu is built from the whole selection, so
+        // delete/open/send-to operate on all selected files (Explorer semantics).
         SelectionCoordinator?.NotifyActivated(this);
         if (!item.IsSelected)
         {
@@ -907,22 +908,46 @@ public partial class FencePanel : UserControl, ISelectionContainer
         var hostWindow = Window.GetWindow(this);
         if (hostWindow is null) return; // 控件已脱离视觉树（fence 正在关闭）
 
+        // 被右键的文件放首位：COM 构建失败时降级为该单文件菜单
+        var selected = ViewModel?.Files.Where(f => f.IsSelected).Select(f => f.FilePath).ToArray();
+        string[] paths = selected is { Length: > 1 }
+            ? [item.FilePath, .. selected.Where(p => !string.Equals(p, item.FilePath, StringComparison.OrdinalIgnoreCase))]
+            : [item.FilePath];
+
         var screenPoint = element.PointToScreen(e.GetPosition(element));
         var hwnd = new WindowInteropHelper(hostWindow).Handle;
-        ShellContextMenu.Show(hwnd, item.FilePath, (int)screenPoint.X, (int)screenPoint.Y);
+        ShellContextMenu.Show(hwnd, paths, (int)screenPoint.X, (int)screenPoint.Y);
 
         e.Handled = true;
     }
 
     // ── Icon loading ─────────────────────────────────────────
 
+    // IconSize 设置上限（与 App.ApplyIconAppearance 的钳制上限一致）。
+    private const double MaxTileIconDip = 64;
+
+    // fence tile 图标请求像素：按「最大可配置 tile 尺寸 × 实际 DPI」量化。
+    // 用上限而非当前 IconSize：位图恒 ≥ 任何设置下的显示像素（WPF 只降采样不放大），
+    // IconSize 变更时无需重提取；相比旧的固定 96px，100% DPI 下每图标省 2.25 倍内存。
+    private int TileIconRequestPx
+    {
+        get
+        {
+            var px = ShellIconExtractor.QuantizeRequestSize(
+                MaxTileIconDip, VisualTreeHelper.GetDpi(this).DpiScaleX);
+            Services.IconMetrics.TileIconRequestPx = px; // App 动态添加文件时复用同一尺寸桶
+            return px;
+        }
+    }
+
     public void LoadAllIcons()
     {
         if (ViewModel is null || IconExtractor is null) return;
+        int px = TileIconRequestPx;
         foreach (var file in ViewModel.Files)
         {
             if (file.Icon is null)
-                file.Icon = IconExtractor.GetIcon(file.FilePath);
+                file.Icon = IconExtractor.GetIcon(file.FilePath, px);
         }
     }
 
@@ -930,7 +955,7 @@ public partial class FencePanel : UserControl, ISelectionContainer
     {
         if (IconExtractor is null) return;
         if (item.Icon is null)
-            item.Icon = IconExtractor.GetIcon(item.FilePath);
+            item.Icon = IconExtractor.GetIcon(item.FilePath, TileIconRequestPx);
 
         // Scale-in animation for newly added file item
         AnimateNewFileItem(item);
