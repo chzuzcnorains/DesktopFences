@@ -95,6 +95,12 @@ public sealed class DesktopEmbedManager : IDisposable
                 {
                     foreach (var hwnd in _managedWindows)
                         SendToBottom(hwnd);
+
+                    // 与 OnDebouncedForegroundRecovery 对齐的兜底快速复检（bug 46）：
+                    // topmost 悬浮面板长期占住前台时，上面对 topmost 带 fence 的降级
+                    // 若恰逢准桌面态被压到壁纸下，50ms 内实测拉回，而不是等下个
+                    // 5 秒 tick 才自愈（期间整组不可见）。
+                    ScheduleSunkRecheck();
                 }
             });
         };
@@ -323,13 +329,19 @@ public sealed class DesktopEmbedManager : IDisposable
             if (WindowClassUtil.IsDesktopOrTaskbarWindow(hwnd))
                 return;
 
+            // topmost 悬浮窗（PowerToys 命令面板等热键面板）抢前台同样不打断 Win+D / Peek
+            // 置顶：它浮在被展示的桌面之上，属于"桌面相关交互"（bug 1 同原则，bug 46）。
+            // 真正的普通窗口激活时才退出置顶。
+            if (WindowClassUtil.HasTopmostStyle(hwnd))
+                return;
+
             // A real application window activated → fences go back to bottom
             SetAllBottom();
             StatusChanged?.Invoke("BOTTOM (behind other windows)");
         }
         else
         {
-            // 真桌面前台（Progman/WorkerW/SHELLDLL_DefView/SysListView32），典型场景：
+            // 真桌面前台（顶层祖先为 Progman/WorkerW，GA_ROOT 判定见 WindowClassUtil），典型场景：
             // ①点击桌面；②截图工具或最大化窗口关闭后 foreground 立刻回到 Progman。
             // **仅当 fence 确实被压到壁纸下（IsAnyFenceSunkBehindDesktop 实测遮挡）才借用
             // HWND_TOPMOST 拉回**；否则 fence 正常停在 HWND_BOTTOM、可见，绝不主动 hoist——
@@ -511,10 +523,12 @@ public sealed class DesktopEmbedManager : IDisposable
     /// 中心点（fence 内容边框中心不透明，可靠命中），用 WindowFromPoint 看那个位置实际
     /// 是谁在画：
     ///   - 命中自己 → 在顶层，正常；
-    ///   - 命中桌面类窗口 (Progman/WorkerW/SHELLDLL_DefView/SysListView32) → 桌面画在了
+    ///   - 命中顶层祖先为 Progman/WorkerW 的窗口（真桌面，GA_ROOT 判定）→ 桌面画在了
     ///     fence 本该出现的位置，说明 fence 已沉到壁纸下 → true；
     ///   - 命中其它普通 app 窗口 → fence 被合法遮挡（用户开了别的窗口），不算沉，跳过
-    ///     （保护 bug 14：别的程序最大化时不要把 fence 抢到 topmost）。
+    ///     （保护 bug 14：别的程序最大化时不要把 fence 抢到 topmost）。注意资源管理器的
+    ///     文件视图子窗口类名也是 SHELLDLL_DefView/SysListView32，但其 GA_ROOT 是
+    ///     CabinetWClass → 按合法遮挡处理，不 hoist（bug 45）。
     /// 不探测 overlay（_overlayWindow）：它是 AllowsTransparency 层叠窗口、空白处 alpha=0
     /// 会 click-through 透传误返回桌面（bug 19）。overlay 与 fence 一起下沉，靠 fence 触发
     /// 整组 hoist 一并带回。
@@ -556,7 +570,9 @@ public sealed class DesktopEmbedManager : IDisposable
         }
 
         var foreground = NativeMethods.GetForegroundWindow();
-        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground))
+        // topmost 悬浮窗前台与桌面/任务栏前台同类（准桌面态，bug 46）：HWND_BOTTOM 有被
+        // 推到壁纸下的风险，走 topmost 分支保证"立即可见"，后续由常规降级路径收回。
+        if (WindowClassUtil.IsDesktopOrTaskbarWindow(foreground) || WindowClassUtil.HasTopmostStyle(foreground))
         {
             HoistSingleAboveDesktop(hwnd);
         }
@@ -634,6 +650,17 @@ public sealed class DesktopEmbedManager : IDisposable
             // all! HWND_BOTTOM here can push the window behind the wallpaper on Win11.
             return;
         }
+
+        // topmost 悬浮窗前台（PowerToys 命令面板等热键面板，WS_EX_TOPMOST）时，跳过对
+        // **普通带窗口**的冗余降级（bug 46）：fence 本就停在 HWND_BOTTOM，重复下发
+        // HWND_BOTTOM 是它被 DWM 推到壁纸下（准桌面态）的唯一诱因；且 topmost 前台永远
+        // 在非 topmost fence 之上，这次降级毫无意义。
+        // ⚠️ 仅当目标不带 WS_EX_TOPMOST 才跳过：处于 topmost 带的 fence（Win+D / 借用
+        // topmost）**必须**照常降级——面板可能长期占住前台，一刀切跳过会让 Win+D 恢复
+        // 应用后 fence 卡在应用之上（bug 46 回归）。此时屏幕已有普通窗口遮挡桌面，
+        // HWND_BOTTOM 稳定；万一仍处准桌面态被压沉，由 sunk 自愈复检拉回。
+        if (WindowClassUtil.HasTopmostStyle(foreground) && !WindowClassUtil.HasTopmostStyle(hwnd))
+            return;
 
         // Normal path: foreground is not desktop, safe to use HWND_BOTTOM
         NativeMethods.SetWindowPos(

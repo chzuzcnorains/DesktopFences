@@ -9,6 +9,7 @@ internal static class NativeMethods
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_NOACTIVATE = 0x08000000;
     public const int WS_EX_TRANSPARENT = 0x00000020;
+    public const int WS_EX_TOPMOST = 0x00000008;
 
     // --- SetWindowPos flags ---
     public static readonly IntPtr HWND_TOP = new(0);
@@ -155,6 +156,12 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetParent(IntPtr hWnd);
+
+    /// <summary>GetAncestor flag：取顶层祖先（不追 owner 链——GA_ROOTOWNER 会把任务栏弹出菜单归到 owner，禁用）。</summary>
+    public const uint GA_ROOT = 2;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct KBDLLHOOKSTRUCT
