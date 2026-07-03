@@ -78,8 +78,10 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
     private double IconRowHeight => _iconSize + 6;
     private const double TextRowHeight = 36;
 
-    // 提取像素 = 2×DIP（预留 200% DPI 余量，WPF 只降采样保证清晰）
-    private int IconPixelSize => (int)Math.Round(_iconSize * 2);
+    // 提取像素 = 显示 DIP × 实际 DPI（量化到 16 的倍数）。旧写法固定 2×DIP 在
+    // 100% 缩放下是 4 倍像素浪费（48 DIP 提 96px 位图），桌面图标上百时是内存大头。
+    // 位图 ≥ 显示像素（QuantizeRequestSize 向上取整），WPF 只降采样保证清晰。
+    private int IconPixelSize => ShellIconExtractor.QuantizeRequestSize(_iconSize, _dpiScaleX);
 
     // AllowsTransparency=True 的层叠窗口下，Windows OS 用每像素 alpha 决定 click 走向：
     // alpha=0 的像素直接被判为 click-through，根本不会送到 WPF 的命中测试。
@@ -92,10 +94,21 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
     private static readonly SolidColorBrush SelectedBrush =
         new(Color.FromArgb(0x44, 0x66, 0x88, 0xCC));
 
+    // 所有图标标签共用一份冻结阴影：桌面图标上百时，每标签独立 new 一个
+    // DropShadowEffect 实例是纯浪费（参数完全相同，冻结后可安全共享）。
+    private static readonly DropShadowEffect LabelShadow = new()
+    {
+        BlurRadius = 3,
+        ShadowDepth = 1,
+        Opacity = 0.8,
+        Color = Colors.Black
+    };
+
     static DesktopIconOverlay()
     {
         ClickableTransparentBrush.Freeze();
         SelectedBrush.Freeze();
+        LabelShadow.Freeze();
     }
 
     /// <summary>Fired when a file is dragged off the overlay into a fence.</summary>
@@ -109,6 +122,13 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
         InitializeComponent();
         _embedManager = embedManager;
         _iconExtractor = iconExtractor;
+
+        // IconPixelSize 依赖 DPI，而 SetIcons 在 Show()/Loaded 之前就会被调用 →
+        // 构造期先用 GetDpi 取值（HWND 未建时返回主屏 DPI，overlay 本就定位主屏工作区）。
+        // OnLoaded 再用 CompositionTarget 实测值校准，不同则重取图标。
+        var dpi = VisualTreeHelper.GetDpi(this);
+        _dpiScaleX = dpi.DpiScaleX;
+        _dpiScaleY = dpi.DpiScaleY;
 
         // Size to primary monitor work area
         var workArea = SystemParameters.WorkArea;
@@ -132,8 +152,14 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
         var source = PresentationSource.FromVisual(this);
         if (source?.CompositionTarget != null)
         {
+            int oldPixelSize = IconPixelSize;
             _dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
             _dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+
+            // 构造期 GetDpi 与实测不一致（罕见：加载中途 DPI 变化）→ 按新桶重取图标
+            if (IconPixelSize != oldPixelSize)
+                foreach (var (path, border) in _iconElements)
+                    ApplyMetricsToElement(border, path);
         }
 
         // Register with embed manager for z-order (same as FenceHost).
@@ -545,13 +571,7 @@ public partial class DesktopIconOverlay : Window, ISelectionContainer
             Margin = new Thickness(2, 2, 2, 0),
             SnapsToDevicePixels = true,
             UseLayoutRounding = true,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 3,
-                ShadowDepth = 1,
-                Opacity = 0.8,
-                Color = Colors.Black
-            }
+            Effect = LabelShadow
         };
         Grid.SetRow(text, 1);
 

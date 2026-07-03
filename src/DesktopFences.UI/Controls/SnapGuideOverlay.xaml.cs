@@ -21,11 +21,27 @@ public partial class SnapGuideOverlay : Window
     {
         InitializeComponent();
 
-        // Span the entire virtual screen
+        // 平时保持 XAML 的 1×1（AllowsTransparency 层叠窗口持有 宽×高×4 字节的
+        // 软件合成表面，全屏常驻在 2K 屏上即 ~14MB）；ShowLines 显示虚线时才撑满
+        // 虚拟屏，Hide 后缩回释放表面。这里只定位到虚拟屏原点。
         Left = SystemParameters.VirtualScreenLeft;
         Top = SystemParameters.VirtualScreenTop;
-        Width = SystemParameters.VirtualScreenWidth;
-        Height = SystemParameters.VirtualScreenHeight;
+    }
+
+    /// <summary>
+    /// 撑满整个虚拟屏（带跳过 guard：ShowLines 随 WM_MOVING 高频调用，避免反复布局；
+    /// 每次重读 SystemParameters 顺带修复显示器拓扑变化后的陈旧边界）。
+    /// </summary>
+    private void EnsureFullScreenBounds()
+    {
+        double left = SystemParameters.VirtualScreenLeft;
+        double top = SystemParameters.VirtualScreenTop;
+        double width = SystemParameters.VirtualScreenWidth;
+        double height = SystemParameters.VirtualScreenHeight;
+        if (Left != left) Left = left;
+        if (Top != top) Top = top;
+        if (Width != width) Width = width;
+        if (Height != height) Height = height;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -54,9 +70,11 @@ public partial class SnapGuideOverlay : Window
 
         if (lines.Count == 0)
         {
-            Visibility = Visibility.Hidden;
+            Hide();
             return;
         }
+
+        EnsureFullScreenBounds();
 
         var brush = new SolidColorBrush(GuideColor);
         var dashStyle = new DashStyle(new double[] { 4, 3 }, 0);
@@ -97,11 +115,13 @@ public partial class SnapGuideOverlay : Window
     }
 
     /// <summary>
-    /// Hide all snap guide lines.
+    /// Hide all snap guide lines（并缩回 1×1 确定性释放层叠窗口的全屏合成表面）.
     /// </summary>
     public new void Hide()
     {
         GuideCanvas.Children.Clear();
         Visibility = Visibility.Hidden;
+        Width = 1;
+        Height = 1;
     }
 }

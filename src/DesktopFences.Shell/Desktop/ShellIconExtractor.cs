@@ -34,8 +34,8 @@ public sealed class ShellIconExtractor
 
     /// <summary>
     /// Get the icon at a specific physical-pixel size (cached per size bucket).
-    /// 覆盖层跟随桌面「查看」尺寸时按 iconSize*2 请求（预留 200% DPI 余量，
-    /// WPF 只降采样不放大，任何缩放比下都清晰）。
+    /// 调用方用 <see cref="QuantizeRequestSize"/> 把「显示 DIP × 实际 DPI」量化成
+    /// 少数几个尺寸桶，避免为几乎相同的尺寸缓存多份位图。
     /// </summary>
     public ImageSource? GetIcon(string filePath, int pixelSize)
     {
@@ -113,6 +113,18 @@ public sealed class ShellIconExtractor
     private const int LargeIconPixelSize = 96;
     private const int SmallIconPixelSize = 32;
 
+    /// <summary>
+    /// 显示 DIP × DPI 缩放 → 物理像素请求尺寸：向上取整后量化到 16 的倍数（钳 32-256）。
+    /// 量化保证同一台机器上实际只出现 1-2 个尺寸桶（LRU key 含尺寸，桶多 = 同图多份）；
+    /// 向上取整保证位图 ≥ 显示像素，WPF 只降采样不放大（放大才会糊）。
+    /// 例：44 DIP@100%→48px；44@150%（需 66px）→80px；64@200%→128px。
+    /// </summary>
+    public static int QuantizeRequestSize(double displayDip, double dpiScale)
+    {
+        int needed = (int)Math.Ceiling(displayDip * Math.Max(1.0, dpiScale));
+        return Math.Clamp((needed + 15) / 16 * 16, 32, 256);
+    }
+
     private static ImageSource? ExtractIcon(string filePath, int pixelSize)
     {
         // Modern path: IShellItemImageFactory::GetImage — same code Explorer uses.
@@ -146,9 +158,10 @@ public sealed class ShellIconExtractor
             var size = new NativeMethods.SIZE(pixelSize, pixelSize);
             // IconOnly: never substitute a thumbnail (we cache by extension, so
             // per-file thumbnails would all collide on one cache key anyway).
-            // BiggerSizeOk: let shell return its native resolution if larger; we'll
-            // still downscale to the render target.
-            var flags = NativeMethods.SIIGBF.IconOnly | NativeMethods.SIIGBF.BiggerSizeOk;
+            // 不带 BiggerSizeOk：让 shell 用资源管理器同款算法降采样到精确请求尺寸。
+            // 带上它 shell 会直接返回原生分辨率（常见 256×256 ≈ 256KB/张）整张进缓存，
+            // 是内存大头；显示端反正 ≤ 请求尺寸，精确位图视觉不变。
+            var flags = NativeMethods.SIIGBF.IconOnly;
 
             hr = factory.GetImage(size, flags, out IntPtr hbitmap);
             if (hr != 0 || hbitmap == IntPtr.Zero)

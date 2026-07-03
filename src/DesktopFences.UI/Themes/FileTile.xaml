@@ -14,12 +14,21 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib"
-                    xmlns:conv="clr-namespace:DesktopFences.UI.Converters">
+                    xmlns:conv="clr-namespace:DesktopFences.UI.Converters"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    mc:Ignorable="po">
 
     <!-- ═════ 可通过 DynamicResource 覆盖的默认值 ═════ -->
     <sys:Double x:Key="FileTileIconSize">44</sys:Double>
     <sys:Double x:Key="FileTileWidth">88</sys:Double>
     <sys:Double x:Key="FileTileHeight">96</sys:Double>
+
+    <!-- ═════ tile 字母/badge 的文字阴影（冻结共享，避免每 tile 各建一个实例）═════ -->
+    <DropShadowEffect x:Key="TileBadgeShadow" po:Freeze="True"
+                      BlurRadius="3" ShadowDepth="1" Opacity="0.45" Color="Black"/>
+    <DropShadowEffect x:Key="SysBadgeShadow" po:Freeze="True"
+                      BlurRadius="2" ShadowDepth="0.6" Opacity="0.4" Color="Black"/>
 
     <!-- ═════ Phase 14: List / Detail 视图尺寸（固定，不随 IconSize 缩放）═════ -->
     <sys:Double x:Key="FileListItemWidth">168</sys:Double>

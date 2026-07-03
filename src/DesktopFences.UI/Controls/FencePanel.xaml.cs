@@ -923,13 +923,31 @@ public partial class FencePanel : UserControl, ISelectionContainer
 
     // ── Icon loading ─────────────────────────────────────────
 
+    // IconSize 设置上限（与 App.ApplyIconAppearance 的钳制上限一致）。
+    private const double MaxTileIconDip = 64;
+
+    // fence tile 图标请求像素：按「最大可配置 tile 尺寸 × 实际 DPI」量化。
+    // 用上限而非当前 IconSize：位图恒 ≥ 任何设置下的显示像素（WPF 只降采样不放大），
+    // IconSize 变更时无需重提取；相比旧的固定 96px，100% DPI 下每图标省 2.25 倍内存。
+    private int TileIconRequestPx
+    {
+        get
+        {
+            var px = ShellIconExtractor.QuantizeRequestSize(
+                MaxTileIconDip, VisualTreeHelper.GetDpi(this).DpiScaleX);
+            Services.IconMetrics.TileIconRequestPx = px; // App 动态添加文件时复用同一尺寸桶
+            return px;
+        }
+    }
+
     public void LoadAllIcons()
     {
         if (ViewModel is null || IconExtractor is null) return;
+        int px = TileIconRequestPx;
         foreach (var file in ViewModel.Files)
         {
             if (file.Icon is null)
-                file.Icon = IconExtractor.GetIcon(file.FilePath);
+                file.Icon = IconExtractor.GetIcon(file.FilePath, px);
         }
     }
 
@@ -937,7 +955,7 @@ public partial class FencePanel : UserControl, ISelectionContainer
     {
         if (IconExtractor is null) return;
         if (item.Icon is null)
-            item.Icon = IconExtractor.GetIcon(item.FilePath);
+            item.Icon = IconExtractor.GetIcon(item.FilePath, TileIconRequestPx);
 
         // Scale-in animation for newly added file item
         AnimateNewFileItem(item);
